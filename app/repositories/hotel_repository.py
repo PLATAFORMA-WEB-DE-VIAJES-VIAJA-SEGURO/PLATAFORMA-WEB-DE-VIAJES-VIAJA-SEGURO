@@ -81,7 +81,7 @@ class HotelRepository:
             and (categoria is None or h.categoria == categoria)
         ]
 
-    # Base para HU-019 y HU-021
+    # HU-019: Obtener hotel por ID
     def obtener_por_id(self, id_hotel: str) -> Optional[Hotel]:
         _verificar_disponibilidad_hoteles(id_hotel)
         return next(

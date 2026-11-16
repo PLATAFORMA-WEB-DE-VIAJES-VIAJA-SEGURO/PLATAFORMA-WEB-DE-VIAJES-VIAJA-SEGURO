@@ -3,8 +3,12 @@ from typing import Optional
 from app.domain.hotel import (
     MUNICIPIOS_HOTEL_VALIDOS,
     CATEGORIAS_HOTEL_VALIDAS,
+    TIPOS_HABITACION_VALIDOS,
+    MONEDAS_HOTEL_AIN03,
     HotelItemOut,
     BusquedaHotelesOut,
+    HabitacionTarifaItemOut,
+    ConsultaHabitacionesOut,
 )
 from app.repositories.hotel_repository import HotelRepository
 
@@ -56,7 +60,6 @@ class HotelService:
             categoria=categoria_norm,
         )
 
-        # RN-17: Sin disponibilidad hotelera para los criterios solicitados
         if not resultados:
             raise ErrorReglaNegocioHotel(
                 "No se encontraron hoteles disponibles para el destino, fechas y huéspedes solicitados"
@@ -65,5 +68,63 @@ class HotelService:
         return BusquedaHotelesOut(
             mensaje="Hoteles disponibles consultados exitosamente",
             data=[HotelItemOut(**h.to_response()) for h in resultados],
+            success=True,
+        )
+
+    # HU-019: Consultar habitaciones y tarifas (RN-19)
+    def consultar_habitaciones_tarifas(
+        self,
+        id_hotel: str,
+        fecha_entrada: date,
+        fecha_salida: date,
+        huespedes: int = 2,
+        tipo_habitacion: Optional[str] = None,
+    ) -> ConsultaHabitacionesOut:
+        tipo_norm = tipo_habitacion.strip().upper() if tipo_habitacion else None
+
+        if tipo_norm and tipo_norm not in TIPOS_HABITACION_VALIDOS:
+            raise ErrorParametrosHotel(
+                "El tipo de habitación no es válido en el catálogo PAR-09 (ESTANDAR, DOBLE, SUITE, FAMILIAR)"
+            )
+        if fecha_entrada < date.today():
+            raise ErrorParametrosHotel(
+                "La fecha de entrada no puede ser anterior a la fecha actual"
+            )
+        if fecha_salida <= fecha_entrada:
+            raise ErrorParametrosHotel(
+                "La fecha de salida debe ser posterior a la fecha de entrada"
+            )
+
+        hotel = self.repo.obtener_por_id(id_hotel)
+        if not hotel:
+            raise ErrorReglaNegocioHotel(
+                "El hotel solicitado no existe o no cuenta con habitaciones activas"
+            )
+
+        if hotel.moneda not in MONEDAS_HOTEL_AIN03:
+            raise ErrorReglaNegocioHotel(
+                "La moneda configurada para el hotel no está habilitada en AIN-03"
+            )
+
+        if hotel.habitaciones_disponibles <= 0:
+            raise ErrorReglaNegocioHotel(
+                "El hotel no dispone de habitaciones libres para el rango de fechas solicitado"
+            )
+
+        noches = (fecha_salida - fecha_entrada).days
+        habitaciones = hotel.generar_habitaciones_tarifas(
+            noches=noches,
+            huespedes=huespedes,
+            tipo_habitacion=tipo_norm,
+        )
+
+        if not habitaciones:
+            raise ErrorReglaNegocioHotel(
+                "Ninguna habitación disponible cumple con la capacidad máxima de huéspedes solicitada"
+            )
+
+        return ConsultaHabitacionesOut(
+            mensaje="Habitaciones y tarifas consultadas exitosamente",
+            data=[HabitacionTarifaItemOut(**hab) for hab in habitaciones],
             success=True,
         )
