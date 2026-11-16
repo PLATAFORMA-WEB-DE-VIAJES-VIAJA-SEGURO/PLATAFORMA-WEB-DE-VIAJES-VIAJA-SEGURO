@@ -9,6 +9,9 @@ from app.domain.hotel import (
     BusquedaHotelesOut,
     HabitacionTarifaItemOut,
     ConsultaHabitacionesOut,
+    BloqueoHabitacionIn,
+    BloqueoHabitacionDataOut,
+    BloqueoHabitacionOut,
 )
 from app.repositories.hotel_repository import HotelRepository
 
@@ -126,5 +129,77 @@ class HotelService:
         return ConsultaHabitacionesOut(
             mensaje="Habitaciones y tarifas consultadas exitosamente",
             data=[HabitacionTarifaItemOut(**hab) for hab in habitaciones],
+            success=True,
+        )
+
+    # HU-021: Bloquear habitación temporalmente (RN-21)
+    def bloquear_habitacion(self, payload: BloqueoHabitacionIn) -> BloqueoHabitacionOut:
+        tipo_norm = payload.tipo_habitacion.strip().upper()
+        capacidades_maximas = {
+            "ESTANDAR": 2,
+            "DOBLE": 3,
+            "SUITE": 4,
+            "FAMILIAR": 6,
+        }
+
+        if tipo_norm not in TIPOS_HABITACION_VALIDOS:
+            raise ErrorParametrosHotel(
+                "El tipo de habitación no es válido en el catálogo PAR-09 (ESTANDAR, DOBLE, SUITE, FAMILIAR)"
+            )
+        if payload.fecha_entrada < date.today():
+            raise ErrorParametrosHotel(
+                "La fecha de entrada no puede ser anterior a la fecha actual"
+            )
+        if payload.fecha_salida <= payload.fecha_entrada:
+            raise ErrorParametrosHotel(
+                "La fecha de salida debe ser al menos un día posterior a la fecha de entrada"
+            )
+
+        capacidad_total = capacidades_maximas[tipo_norm] * payload.cantidad_habitaciones
+        if payload.huespedes > capacidad_total:
+            raise ErrorParametrosHotel(
+                "La cantidad de huéspedes supera la capacidad máxima permitida para las habitaciones solicitadas"
+            )
+
+        hotel = self.repo.obtener_por_id(payload.id_hotel)
+        if not hotel:
+            raise ErrorReglaNegocioHotel(
+                "El hotel seleccionado no existe o no se encuentra activo"
+            )
+
+        if hotel.moneda not in MONEDAS_HOTEL_AIN03:
+            raise ErrorReglaNegocioHotel(
+                "La moneda configurada para el hotel no está habilitada en AIN-03"
+            )
+
+        # RN-21: Validar disponibilidad real antes de ejecutar bloqueo temporal
+        if hotel.habitaciones_disponibles < payload.cantidad_habitaciones:
+            raise ErrorReglaNegocioHotel(
+                "No hay suficientes habitaciones disponibles en el hotel para realizar el bloqueo temporal"
+            )
+
+        noches = (payload.fecha_salida - payload.fecha_entrada).days
+        total_retenido = hotel.calcular_total_bloqueo(
+            tipo_habitacion=tipo_norm,
+            noches=noches,
+            cantidad_habitaciones=payload.cantidad_habitaciones,
+        )
+
+        bloqueo = self.repo.registrar_bloqueo(
+            hotel=hotel,
+            tipo_habitacion=tipo_norm,
+            fecha_entrada=payload.fecha_entrada,
+            fecha_salida=payload.fecha_salida,
+            noches=noches,
+            cantidad_habitaciones=payload.cantidad_habitaciones,
+            huespedes=payload.huespedes,
+            id_usuario=payload.id_usuario,
+            total_retenido=total_retenido,
+            minutos_bloqueo=payload.minutos_bloqueo,
+        )
+
+        return BloqueoHabitacionOut(
+            mensaje="Habitación bloqueada temporalmente de forma exitosa",
+            data=BloqueoHabitacionDataOut(**bloqueo.to_response()),
             success=True,
         )

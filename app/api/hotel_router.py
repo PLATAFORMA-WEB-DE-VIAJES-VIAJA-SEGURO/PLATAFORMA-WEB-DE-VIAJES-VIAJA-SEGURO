@@ -2,7 +2,12 @@ from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Path, Query, status
 from fastapi.responses import JSONResponse
-from app.domain.hotel import BusquedaHotelesOut, ConsultaHabitacionesOut
+from app.domain.hotel import (
+    BusquedaHotelesOut,
+    ConsultaHabitacionesOut,
+    BloqueoHabitacionIn,
+    BloqueoHabitacionOut,
+)
 from app.services.hotel_service import (
     HotelService,
     ErrorParametrosHotel,
@@ -100,6 +105,38 @@ def consultar_habitaciones_tarifas(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "No fue posible consultar las habitaciones y tarifas del hotel en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+# HU-021: Bloquear habitación temporalmente
+@router.post(
+    "/bloqueos",
+    response_model=BloqueoHabitacionOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Bloquear habitación temporalmente",
+    description="Retiene temporalmente el inventario de habitaciones en AEX-02 validando tipo de habitación (PAR-09) y moneda (PAR-07) mediante AIN-03 (RN-21).",
+)
+def bloquear_habitacion(payload: BloqueoHabitacionIn):
+    try:
+        return service.bloquear_habitacion(payload)
+    except ErrorParametrosHotel as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except ErrorReglaNegocioHotel as e:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "El proveedor hotelero (AEX-02) no está disponible para registrar el bloqueo temporal",
                 "data": None,
                 "success": False,
             },
