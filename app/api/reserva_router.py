@@ -4,6 +4,11 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Path, Query, status
 from fastapi.responses import JSONResponse
 from app.domain.reserva import (
+    ItemCarritoCreate,
+    ItemCarritoResponse,
+    ReglaNegocioRN33Exception,
+    DatosItemCarritoInvalidosException,
+    ServiciosCarritoNoDisponiblesException,
     CalculoTotalResponse,
     ReglaNegocioRN37Exception,
     CarritoNoIdentificadoException,
@@ -33,6 +38,67 @@ router = APIRouter(
 )
 
 servicio = ReservaService(repo=reserva_repository)
+
+# Documentación OpenAPI para HU-033 (Agregar ítem al carrito)
+RESPUESTAS_OPENAPI_AGREGAR_ITEM = {
+    201: {
+        "description": "Ítem agregado al carrito exitosamente",
+        "model": ItemCarritoResponse,
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Ítem agregado al carrito exitosamente",
+                    "data": {
+                        "id_carrito": 701,
+                        "id_item": 1,
+                        "tipo_servicio": "VUELO",
+                        "id_referencia_bloqueo": "BLK-V-9001",
+                        "cantidad": 2,
+                        "subtotal": 900000.0,
+                        "total_items_carrito": 1,
+                    },
+                    "success": True,
+                }
+            }
+        },
+    },
+    400: {
+        "description": "El tipo de servicio, cantidad o referencia de bloqueo no son válidos",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El tipo de servicio, cantidad o referencia de bloqueo no son válidos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "Error por Regla de Negocio RN-33 (El bloqueo temporal ha expirado o el ítem ya está en el carrito)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El bloqueo temporal del servicio ha expirado o el ítem ya está en el carrito",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de Disponibilidad (Indisponibilidad de servicios AIN-09, AIN-10 o AIN-13)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible actualizar el carrito de compras en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
 
 # Documentación OpenAPI para HU-037 (Calcular total de la compra)
 RESPUESTAS_OPENAPI_CALCULAR_TOTAL = {
@@ -273,6 +339,78 @@ RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS = {
 }
 
 
+@router.post(
+    "/carrito/items",
+    response_model=ItemCarritoResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=RESPUESTAS_OPENAPI_AGREGAR_ITEM,
+    summary="Agregar ítem al carrito (HU-033)",
+    description="Añade un servicio validado (vuelo, hotel o paquete) al carrito activo del viajero verificando vigencia y no duplicidad del bloqueo bajo RN-33.",
+)
+def agregar_item_carrito(payload: ItemCarritoCreate):
+    load_dotenv(override=True)
+    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+
+    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
+    es_simulacion_falla = (
+        payload.id_usuario == 503
+        or payload.id_referencia_bloqueo.strip().upper() in ("BLK-503", "503")
+    )
+
+    if simular_falla_env or es_simulacion_falla:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible actualizar el carrito de compras en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+    try:
+        return servicio.agregar_item_carrito(payload)
+    except ReglaNegocioRN33Exception as e:
+        # Caso 2: Error por Regla de Negocio RN-33 -> 409 Conflict
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except DatosItemCarritoInvalidosException as e:
+        # Caso 3: Error de Validación -> 400 Bad Request
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except ServiciosCarritoNoDisponiblesException as e:
+        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except Exception:
+        # Fallos imprevistos ocultando trazas técnicas -> 503
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible actualizar el carrito de compras en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
 @router.get(
     "/carrito/total",
     response_model=CalculoTotalResponse,
@@ -286,8 +424,6 @@ def calcular_total_compra(
 ):
     load_dotenv(override=True)
     simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-
-    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
     es_simulacion_falla = id_usuario == 503
 
     if simular_falla_env or es_simulacion_falla:
@@ -303,37 +439,21 @@ def calcular_total_compra(
     try:
         return servicio.calcular_total_compra(id_usuario=id_usuario)
     except ReglaNegocioRN37Exception as e:
-        # Caso 2: Error por Regla de Negocio RN-37 -> 409 Conflict
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except CarritoNoIdentificadoException as e:
-        # Caso 3: Error de Validación o Parámetros -> 400 Bad Request
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except ServiciosCalculoTotalNoDisponiblesException as e:
-        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except Exception:
-        # Fallos imprevistos ocultando trazas técnicas -> 503
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
