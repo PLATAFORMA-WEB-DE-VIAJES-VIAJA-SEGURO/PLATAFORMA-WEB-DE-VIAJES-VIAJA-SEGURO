@@ -2,7 +2,12 @@ from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Path, Query, status
 from fastapi.responses import JSONResponse
-from app.domain.vuelo import BusquedaVuelosOut, ConsultaTarifasVueloOut
+from app.domain.vuelo import (
+    BusquedaVuelosOut,
+    ConsultaTarifasVueloOut,
+    BloqueoPuestosCreate,
+    BloqueoPuestosOut,
+)
 from app.services.vuelo_service import (
     VueloService,
     ErrorParametrosBusquedaVuelo,
@@ -96,6 +101,36 @@ def consultar_tarifas_vuelo(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "No fue posible consultar las tarifas del vuelo en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+# HU-015: Bloquear puestos temporalmente
+@router.post(
+    "/{id_vuelo}/bloqueo",
+    response_model=BloqueoPuestosOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Bloquear puestos temporalmente",
+    description="Retiene temporalmente los cupos solicitados en AEX-01 durante un máximo de 20 minutos antes del cierre de compra (RN-15).",
+)
+def bloquear_puestos_vuelo(
+    datos: BloqueoPuestosCreate,
+    id_vuelo: str = Path(..., min_length=3, max_length=20, description="Identificador del vuelo (ej. VL-101)"),
+):
+    try:
+        return service.bloquear_puestos_vuelo(id_vuelo=id_vuelo, datos=datos)
+    except ErrorReglaNegocioVuelo as e:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible bloquear los puestos del vuelo en este momento",
                 "data": None,
                 "success": False,
             },

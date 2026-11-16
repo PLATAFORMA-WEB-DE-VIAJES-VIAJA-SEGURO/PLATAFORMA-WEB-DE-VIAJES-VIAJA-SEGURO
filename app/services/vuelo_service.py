@@ -8,6 +8,9 @@ from app.domain.vuelo import (
     BusquedaVuelosOut,
     TarifaVueloItemOut,
     ConsultaTarifasVueloOut,
+    BloqueoPuestosCreate,
+    BloqueoPuestosDataOut,
+    BloqueoPuestosOut,
 )
 from app.repositories.vuelo_repository import VueloRepository
 
@@ -112,5 +115,32 @@ class VueloService:
         return ConsultaTarifasVueloOut(
             mensaje="Tarifas del vuelo consultadas exitosamente",
             data=[TarifaVueloItemOut(**t) for t in tarifas],
+            success=True,
+        )
+
+    # HU-015: Bloquear puestos temporalmente (RN-15)
+    def bloquear_puestos_vuelo(
+        self, id_vuelo: str, datos: BloqueoPuestosCreate
+    ) -> BloqueoPuestosOut:
+        vuelo = self.repo.obtener_por_id(id_vuelo)
+        if not vuelo:
+            raise ErrorReglaNegocioVuelo(
+                "El vuelo solicitado no existe o ya no se encuentra activo"
+            )
+
+        if vuelo.puestos_disponibles < datos.cantidad_puestos:
+            raise ErrorReglaNegocioVuelo(
+                "No hay suficientes puestos disponibles en el vuelo para realizar el bloqueo solicitado"
+            )
+
+        bloqueo = self.repo.crear_bloqueo(
+            vuelo=vuelo,
+            cantidad_puestos=datos.cantidad_puestos,
+            tiempo_bloqueo_minutos=datos.tiempo_bloqueo_minutos,
+        )
+
+        return BloqueoPuestosOut(
+            mensaje="Puestos bloqueados temporalmente exitosamente",
+            data=BloqueoPuestosDataOut(**bloqueo.to_response()),
             success=True,
         )

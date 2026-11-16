@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Catálogos y reglas transversales (MOD-02 / AIN-02)
 AEROPUERTOS_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
@@ -47,6 +47,65 @@ class ConsultaTarifasVueloOut(BaseModel):
     mensaje: str
     data: Optional[List[TarifaVueloItemOut]] = None
     success: bool
+
+
+# HU-015: Esquemas de bloqueo temporal de puestos
+class BloqueoPuestosCreate(BaseModel):
+    cantidad_puestos: int = Field(..., ge=1, le=9)
+    tiempo_bloqueo_minutos: int = Field(default=20, ge=5, le=20)
+    codigo_tarifa: Optional[str] = Field(default=None)
+
+
+class BloqueoPuestosDataOut(BaseModel):
+    id_bloqueo: str
+    id_vuelo: str
+    numero_vuelo: str
+    cantidad_puestos: int
+    puestos_restantes_vuelo: int
+    tiempo_bloqueo_minutos: int
+    fecha_expiracion: str
+    estado: str
+
+
+class BloqueoPuestosOut(BaseModel):
+    mensaje: str
+    data: Optional[BloqueoPuestosDataOut] = None
+    success: bool
+
+
+# Entidad de dominio: Bloqueo de puestos (HU-015)
+class BloqueoVuelo:
+    def __init__(
+        self,
+        id_bloqueo: str,
+        id_vuelo: str,
+        numero_vuelo: str,
+        cantidad_puestos: int,
+        puestos_restantes_vuelo: int,
+        tiempo_bloqueo_minutos: int = 20,
+    ):
+        self.id_bloqueo = id_bloqueo
+        self.id_vuelo = id_vuelo
+        self.numero_vuelo = numero_vuelo
+        self.cantidad_puestos = cantidad_puestos
+        self.puestos_restantes_vuelo = puestos_restantes_vuelo
+        self.tiempo_bloqueo_minutos = tiempo_bloqueo_minutos
+        self.fecha_expiracion = (
+            datetime.utcnow() + timedelta(minutes=tiempo_bloqueo_minutos)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.estado = "ACTIVO"
+
+    def to_response(self) -> dict:
+        return {
+            "id_bloqueo": self.id_bloqueo,
+            "id_vuelo": self.id_vuelo,
+            "numero_vuelo": self.numero_vuelo,
+            "cantidad_puestos": self.cantidad_puestos,
+            "puestos_restantes_vuelo": self.puestos_restantes_vuelo,
+            "tiempo_bloqueo_minutos": self.tiempo_bloqueo_minutos,
+            "fecha_expiracion": self.fecha_expiracion,
+            "estado": self.estado,
+        }
 
 
 # Entidad de dominio: Vuelo
