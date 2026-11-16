@@ -5,10 +5,14 @@ from dotenv import load_dotenv
 from app.domain.vuelo import Vuelo
 
 
-def _verificar_disponibilidad_gds(origen: str = "", destino: str = "") -> None:
+def _verificar_disponibilidad_gds(valor_control: str = "", destino: str = "") -> None:
     load_dotenv(override=True)
     falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
-    if falla_env or origen == "503" or destino == "503":
+    if (
+        falla_env
+        or valor_control.upper() in {"503", "VL-503"}
+        or destino.upper() == "503"
+    ):
         raise RuntimeError("Fallo de conexión con el proveedor externo AEX-01 (GDS Aerolíneas)")
 
 
@@ -61,8 +65,23 @@ class VueloRepository:
                 precio_base=1450000.0,
                 moneda="COP",
             ),
+            Vuelo(
+                id_vuelo="VL-104",
+                aerolinea="Iberia",
+                numero_vuelo="IB6588",
+                origen="BOG",
+                destino="MAD",
+                fecha_salida=date(2026, 12, 22),
+                hora_salida="18:10",
+                hora_llegada="10:30",
+                duracion="10h 20m",
+                puestos_disponibles=0,
+                precio_base=3100000.0,
+                moneda="COP",
+            ),
         ]
 
+    # HU-011: Buscar vuelos disponibles en AEX-01
     def buscar_vuelos(
         self, origen: str, destino: str, fecha_salida: date, pasajeros: int
     ) -> List[Vuelo]:
@@ -76,10 +95,11 @@ class VueloRepository:
             and v.puestos_disponibles >= pasajeros
         ]
 
+    # HU-013: Obtener vuelo por ID
     def obtener_por_id(self, id_vuelo: str) -> Optional[Vuelo]:
-        _verificar_disponibilidad_gds()
+        _verificar_disponibilidad_gds(id_vuelo)
         return next(
-            (v for v in self._vuelos if v.id_vuelo == id_vuelo and v.activo),
+            (v for v in self._vuelos if v.id_vuelo == id_vuelo.strip().upper() and v.activo),
             None,
         )
 

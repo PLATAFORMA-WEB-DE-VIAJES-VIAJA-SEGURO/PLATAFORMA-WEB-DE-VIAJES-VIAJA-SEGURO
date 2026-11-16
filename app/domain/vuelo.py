@@ -1,10 +1,14 @@
 from datetime import date
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
+# Catálogos y reglas transversales (MOD-02 / AIN-02)
 AEROPUERTOS_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
+CABINAS_VALIDAS = {"ECONOMICA", "EJECUTIVA", "PRIMERA"}
+MONEDAS_VALIDAS_AIN02 = {"COP", "USD"}
 
 
+# HU-011: Esquemas de búsqueda de vuelos
 class VueloItemOut(BaseModel):
     id_vuelo: str
     aerolinea: str
@@ -26,6 +30,26 @@ class BusquedaVuelosOut(BaseModel):
     success: bool
 
 
+# HU-013: Esquemas de consulta de tarifas del vuelo
+class TarifaVueloItemOut(BaseModel):
+    codigo_tarifa: str
+    nombre_tarifa: str
+    cabina: str
+    equipaje_incluido: str
+    permite_cambios: bool
+    precio_unitario: float
+    impuestos: float
+    precio_total_pasajero: float
+    moneda: str
+
+
+class ConsultaTarifasVueloOut(BaseModel):
+    mensaje: str
+    data: Optional[List[TarifaVueloItemOut]] = None
+    success: bool
+
+
+# Entidad de dominio: Vuelo
 class Vuelo:
     def __init__(
         self,
@@ -57,6 +81,7 @@ class Vuelo:
         self.moneda = moneda
         self.activo = activo
 
+    # HU-011: Serialización del vuelo
     def to_response(self) -> dict:
         return {
             "id_vuelo": self.id_vuelo,
@@ -72,3 +97,60 @@ class Vuelo:
             "precio_base": self.precio_base,
             "moneda": self.moneda,
         }
+
+    # HU-013: Cálculo de familias tarifarias
+    def generar_familias_tarifarias(self, cabina: Optional[str] = None, equipaje_bodega: int = 0) -> List[dict]:
+        factor_equipaje = equipaje_bodega * 85000.0
+        familias = [
+            {
+                "codigo_tarifa": f"{self.id_vuelo}-ECO-BASIC",
+                "nombre_tarifa": "Económica Básica",
+                "cabina": "ECONOMICA",
+                "equipaje_incluido": "1 artículo personal" + (f" + {equipaje_bodega} maleta(s) 23kg" if equipaje_bodega > 0 else ""),
+                "permite_cambios": False,
+                "multiplicador": 1.0,
+            },
+            {
+                "codigo_tarifa": f"{self.id_vuelo}-ECO-FLEX",
+                "nombre_tarifa": "Económica Flexible",
+                "cabina": "ECONOMICA",
+                "equipaje_incluido": f"1 equipaje de mano + {max(1, equipaje_bodega)} maleta(s) 23kg",
+                "permite_cambios": True,
+                "multiplicador": 1.25,
+            },
+            {
+                "codigo_tarifa": f"{self.id_vuelo}-EJE-PLUS",
+                "nombre_tarifa": "Ejecutiva Plus",
+                "cabina": "EJECUTIVA",
+                "equipaje_incluido": "2 maletas 32kg + sala VIP" + (f" + {equipaje_bodega} extra" if equipaje_bodega > 0 else ""),
+                "permite_cambios": True,
+                "multiplicador": 1.85,
+            },
+            {
+                "codigo_tarifa": f"{self.id_vuelo}-PRI-SUITE",
+                "nombre_tarifa": "Primera Clase Suite",
+                "cabina": "PRIMERA",
+                "equipaje_incluido": "3 maletas 32kg + embarque prioritario",
+                "permite_cambios": True,
+                "multiplicador": 2.6,
+            },
+        ]
+
+        resultado = []
+        for f in familias:
+            if cabina and f["cabina"] != cabina:
+                continue
+            unitario = round((self.precio_base * f["multiplicador"]) + factor_equipaje, 2)
+            impuestos = round(unitario * 0.19, 2)
+            resultado.append({
+                "codigo_tarifa": f["codigo_tarifa"],
+                "nombre_tarifa": f["nombre_tarifa"],
+                "cabina": f["cabina"],
+                "equipaje_incluido": f["equipaje_incluido"],
+                "permite_cambios": f["permite_cambios"],
+                "precio_unitario": unitario,
+                "impuestos": impuestos,
+                "precio_total_pasajero": round(unitario + impuestos, 2),
+                "moneda": self.moneda,
+            })
+        return resultado
