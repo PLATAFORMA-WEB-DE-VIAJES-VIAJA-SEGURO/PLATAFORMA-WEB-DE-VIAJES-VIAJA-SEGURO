@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.transaccion_router import router as transaccion_router
 from app.api.pago_router import router as pago_router
+from app.api.factura_router import router as factura_router
 from app.api.notificacion_router import router as notificacion_router
 from app.api.soporte_router import router as soporte_router
 from app.api.usuario_router import router as usuario_router
@@ -40,8 +41,10 @@ app.include_router(vuelo_router)
 app.include_router(documento_viaje_router)
 app.include_router(transaccion_router)
 app.include_router(pago_router)
-app.include_router(notificacion_router)
+app.include_router(transaccion_router)
+app.include_router(factura_router)
 app.include_router(soporte_router)
+app.include_router(notificacion_router)
 
 @app.get("/", tags=["Root"])
 def root():
@@ -55,4 +58,3 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-    
