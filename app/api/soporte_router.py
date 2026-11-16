@@ -2,15 +2,15 @@ import os
 from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from domain.soporte import (
+from app.domain.soporte import (
     CasoSoporteCreate,
     CasoSoporteResponse,
     ReglaNegocioRN51Exception,
     ServicioNoDisponibleException,
     ValidacionParametrosException
 )
-from service.soporte_service import SoporteService
-from repository.soporte_repository import soporte_repository
+from app.services.soporte_service import SoporteService
+from app.repositories.soporte_repository import soporte_repository
 
 router = APIRouter(
     prefix="/api/v1/soporte",

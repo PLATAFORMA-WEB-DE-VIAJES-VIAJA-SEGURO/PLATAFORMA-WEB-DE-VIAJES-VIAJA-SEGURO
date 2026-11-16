@@ -2,11 +2,11 @@ import fastapi
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from api.transaccion_router import router as transaccion_router
-from api.pago_router import router as pago_router
-from api.notificacion_router import router as notificacion_router
-from api.soporte_router import router as soporte_router
-from api.factura_router import router as factura_router
+from app.api.transaccion_router import router as transaccion_router
+from app.api.pago_router import router as pago_router
+from app.api.factura_router import router as factura_router
+from app.api.notificacion_router import router as notificacion_router
+from app.api.soporte_router import router as soporte_router
 from app.api.usuario_router import router as usuario_router
 
 app = fastapi.FastAPI(

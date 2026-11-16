@@ -1,12 +1,12 @@
 import re
-from domain.factura import (
+from app.domain.factura import (
     FacturaResponse,
     FacturaData,
     ReglaNegocioRN48Exception,
     DatosFiscalesInvalidosException
 )
-from repository.factura_repository import FacturaRepository
-from repository.transaccion_repository import TransaccionRepository
+from app.repositories.factura_repository import FacturaRepository
+from app.repositories.transaccion_repository import TransaccionRepository
 
 
 class FacturaService:

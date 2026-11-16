@@ -3,14 +3,14 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse
-from domain.pago import (
+from app.domain.pago import (
     MediosPagoResponse,
     ReglaNegocioRN45Exception,
     MonedaNoSoportadaException,
     PasarelaNoDisponibleException
 )
-from service.pago_service import PagoService
-from repository.pago_repository import pago_repository
+from app.services.pago_service import PagoService
+from app.repositories.pago_repository import pago_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",

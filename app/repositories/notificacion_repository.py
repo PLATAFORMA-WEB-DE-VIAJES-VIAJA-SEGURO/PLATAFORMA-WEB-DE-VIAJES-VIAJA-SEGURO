@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-from domain.notificacion import ProveedorNoDisponibleException
+from app.domain.notificacion import ProveedorNoDisponibleException
 
 class NotificacionRepository:
     """

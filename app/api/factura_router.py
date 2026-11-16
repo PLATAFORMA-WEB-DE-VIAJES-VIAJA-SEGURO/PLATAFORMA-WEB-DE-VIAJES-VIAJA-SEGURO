@@ -2,16 +2,16 @@ import os
 from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from domain.factura import (
+from app.domain.factura import (
     FacturaCreate,
     FacturaResponse,
     ReglaNegocioRN48Exception,
     DatosFiscalesInvalidosException,
     FacturacionNoDisponibleException
 )
-from service.factura_service import FacturaService
-from repository.factura_repository import factura_repository
-from repository.transaccion_repository import transaccion_repository
+from app.services.factura_service import FacturaService
+from app.repositories.factura_repository import factura_repository
+from app.repositories.transaccion_repository import transaccion_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",
