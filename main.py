@@ -2,15 +2,16 @@ import fastapi
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from api.notificacion_router import router as notificacion_router
 from api.soporte_router import router as soporte_router
 
 app = fastapi.FastAPI(
     title="API Viaja Seguro - Módulo Atención al Cliente (MOD-07)",
-    description="Backend oficial para Soporte, Opiniones y Notificaciones (HU-051 / RN-51 - Radicar caso de soporte).",
+    description="Backend oficial para Soporte, Opiniones y Notificaciones (HU-055 / RN-55 - Enviar notificación).",
     version="1.0.0"
 )
 
-# Configuración de CORS
+# Configuración de CORS para integración con cualquier frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,13 +26,14 @@ async def validation_exception_handler(request, exc):
     return JSONResponse(
         status_code=400,
         content={
-            "mensaje": "El tipo de caso, asunto o descripción son obligatorios",
+            "mensaje": "El canal de envío, destinatario o plantilla no son válidos",
             "data": None,
             "success": False
         }
     )
 
-# Registrar el router de soporte
+# Registrar enrutadores de la API (HU-055 Notificaciones y HU-051 Casos)
+app.include_router(notificacion_router)
 app.include_router(soporte_router)
 
 @app.get("/", tags=["Root"])
@@ -39,7 +41,7 @@ def root():
     return {
         "modulo": "Atención al Cliente (MOD-07)",
         "submodulo": "Soporte, Opiniones y Notificaciones",
-        "historia_activa": "[HU-051] Radicar caso de soporte",
+        "historia_activa": "[HU-055] Enviar notificación",
         "version": "1.0.0",
         "docs": "http://127.0.0.1:8000/docs",
         "success": True
