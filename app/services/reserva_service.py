@@ -4,6 +4,11 @@ from app.domain.reserva import (
     CierreCarritoResponse,
     ReglaNegocioRN38Exception,
     DatosCierreCompraInvalidosException,
+    ReservaCreate,
+    ReservaData,
+    ReservaResponse,
+    ReglaNegocioRN39Exception,
+    DatosReservaInvalidosException,
 )
 from app.repositories.reserva_repository import ReservaRepository
 
@@ -16,11 +21,14 @@ MEDIOS_PAGO_PERMITIDOS = {
     "PAYPAL",
 }
 
+MONEDAS_PERMITIDAS = {"COP", "USD", "EUR"}
+
 
 class ReservaService:
     def __init__(self, repo: ReservaRepository):
         self.repo = repo
 
+    # ── HU-038: Cerrar compra ───────────────────────────────────────
     def cerrar_compra(self, datos: CierreCarritoCreate) -> CierreCarritoResponse:
         medio_pago = (datos.medio_pago or "").strip().upper()
         direccion = (datos.direccion_facturacion or "").strip()
@@ -69,6 +77,59 @@ class ReservaService:
 
         return CierreCarritoResponse(
             mensaje="Compra cerrada exitosamente, pendiente de confirmación de pago",
+            data=data,
+            success=True,
+        )
+
+    # ── HU-039: Crear reserva ───────────────────────────────────────
+    def crear_reserva(self, datos: ReservaCreate) -> ReservaResponse:
+        moneda = (datos.moneda or "").strip().upper()
+
+        # ── VALIDACIÓN DE PARÁMETROS Y EXISTENCIA DEL CARRITO (400 Bad Request) ──
+        if moneda not in MONEDAS_PERMITIDAS or datos.total_reserva <= 0:
+            raise DatosReservaInvalidosException(
+                "Datos inválidos o carrito no encontrado para generar la reserva"
+            )
+
+        if not self.repo.verificar_identidad_ain08(datos.id_usuario):
+            raise DatosReservaInvalidosException(
+                "Datos inválidos o carrito no encontrado para generar la reserva"
+            )
+
+        carrito = self.repo.obtener_carrito(datos.id_carrito)
+        if not carrito:
+            raise DatosReservaInvalidosException(
+                "Datos inválidos o carrito no encontrado para generar la reserva"
+            )
+
+        # ── REGLA DE NEGOCIO RN-39 (409 Conflict) ──────────────────────
+        # Evitar duplicidad de reserva sobre un mismo carrito de compras
+        if self.repo.verificar_reserva_existente_por_carrito(datos.id_carrito):
+            raise ReglaNegocioRN39Exception(
+                "Ya existe una reserva generada para este carrito de compras"
+            )
+
+        # ── PERSISTENCIA DE LA RESERVA OFICIAL (MOD-05) ────────────────
+        registro = self.repo.crear_reserva(
+            id_usuario=datos.id_usuario,
+            id_carrito=datos.id_carrito,
+            moneda=moneda,
+            total_reserva=datos.total_reserva,
+        )
+
+        # ── RESPUESTA ESTANDARIZADA (201 Created) ──────────────────────
+        data = ReservaData(
+            id_reserva=registro["id_reserva"],
+            codigo_reserva=registro["codigo_reserva"],
+            id_usuario=registro["id_usuario"],
+            estado=registro["estado"],
+            total=registro["total"],
+            moneda=registro["moneda"],
+            fecha_creacion=registro["fecha_creacion"],
+        )
+
+        return ReservaResponse(
+            mensaje="Reserva creada exitosamente",
             data=data,
             success=True,
         )
