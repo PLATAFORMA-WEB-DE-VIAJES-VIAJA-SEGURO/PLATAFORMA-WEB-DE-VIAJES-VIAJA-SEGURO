@@ -2,8 +2,12 @@ from datetime import date
 from typing import Optional
 from app.domain.vuelo import (
     AEROPUERTOS_VALIDOS,
+    CABINAS_VALIDAS,
+    MONEDAS_VALIDAS_AIN02,
     VueloItemOut,
     BusquedaVuelosOut,
+    TarifaVueloItemOut,
+    ConsultaTarifasVueloOut,
 )
 from app.repositories.vuelo_repository import VueloRepository
 
@@ -20,6 +24,7 @@ class VueloService:
     def __init__(self, repo: VueloRepository):
         self.repo = repo
 
+    # HU-011: Buscar vuelos (RN-11)
     def buscar_vuelos(
         self,
         origen: str,
@@ -52,7 +57,6 @@ class VueloService:
                 "La fecha de regreso no puede ser anterior a la fecha de salida"
             )
 
-        # Consulta simulada al proveedor externo AEX-01 (GDS Aerolíneas)
         resultados = self.repo.buscar_vuelos(
             origen=origen_norm,
             destino=destino_norm,
@@ -60,7 +64,6 @@ class VueloService:
             pasajeros=pasajeros,
         )
 
-        # RN-11: Si no hay disponibilidad suficiente para la ruta/fecha/pasajeros, retorna 409
         if not resultados:
             raise ErrorReglaNegocioVuelo(
                 "No se encontraron vuelos disponibles para la ruta, fecha y cantidad de pasajeros solicitados"
@@ -69,5 +72,45 @@ class VueloService:
         return BusquedaVuelosOut(
             mensaje="Vuelos disponibles consultados exitosamente",
             data=[VueloItemOut(**v.to_response()) for v in resultados],
+            success=True,
+        )
+
+    # HU-013: Consultar tarifas del vuelo (RN-13)
+    def consultar_tarifas_vuelo(
+        self,
+        id_vuelo: str,
+        cabina: Optional[str] = None,
+        equipaje_bodega: int = 0,
+    ) -> ConsultaTarifasVueloOut:
+        cabina_norm = cabina.strip().upper() if cabina else None
+        if cabina_norm and cabina_norm not in CABINAS_VALIDAS:
+            raise ErrorParametrosBusquedaVuelo(
+                "La cabina solicitada no es válida (use ECONOMICA, EJECUTIVA o PRIMERA)"
+            )
+
+        vuelo = self.repo.obtener_por_id(id_vuelo)
+        if not vuelo:
+            raise ErrorReglaNegocioVuelo(
+                "El vuelo solicitado no existe o no cuenta con tarifas vigentes"
+            )
+
+        if vuelo.moneda not in MONEDAS_VALIDAS_AIN02:
+            raise ErrorReglaNegocioVuelo(
+                "La moneda configurada para la tarifa no se encuentra activa en AIN-02"
+            )
+
+        if vuelo.puestos_disponibles <= 0:
+            raise ErrorReglaNegocioVuelo(
+                "El vuelo ya no dispone de cupos para cotizar tarifas vigentes"
+            )
+
+        tarifas = vuelo.generar_familias_tarifarias(
+            cabina=cabina_norm,
+            equipaje_bodega=equipaje_bodega,
+        )
+
+        return ConsultaTarifasVueloOut(
+            mensaje="Tarifas del vuelo consultadas exitosamente",
+            data=[TarifaVueloItemOut(**t) for t in tarifas],
             success=True,
         )
