@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Catálogos transversales (MOD-03 / AIN-03: PAR-03, PAR-08, PAR-09, PAR-07)
 MUNICIPIOS_HOTEL_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
@@ -45,6 +45,41 @@ class HabitacionTarifaItemOut(BaseModel):
 class ConsultaHabitacionesOut(BaseModel):
     mensaje: str
     data: Optional[List[HabitacionTarifaItemOut]] = None
+    success: bool
+
+
+# HU-021: Esquemas de bloqueo temporal de habitación
+class BloqueoHabitacionIn(BaseModel):
+    id_hotel: str = Field(..., min_length=3, max_length=20)
+    tipo_habitacion: str = Field(..., min_length=3, max_length=20)
+    fecha_entrada: date
+    fecha_salida: date
+    cantidad_habitaciones: int = Field(default=1, ge=1, le=5)
+    huespedes: int = Field(default=2, ge=1, le=10)
+    id_usuario: int = Field(..., gt=0)
+    minutos_bloqueo: int = Field(default=15, ge=5, le=30)
+
+
+class BloqueoHabitacionDataOut(BaseModel):
+    codigo_bloqueo: str
+    id_hotel: str
+    nombre_hotel: str
+    tipo_habitacion: str
+    fecha_entrada: date
+    fecha_salida: date
+    noches: int
+    cantidad_habitaciones: int
+    huespedes: int
+    id_usuario: int
+    estado: str
+    total_retenido: float
+    moneda: str
+    expira_en: str
+
+
+class BloqueoHabitacionOut(BaseModel):
+    mensaje: str
+    data: Optional[BloqueoHabitacionDataOut] = None
     success: bool
 
 
@@ -149,3 +184,67 @@ class Hotel:
                 "moneda": self.moneda,
             })
         return resultado
+
+    # HU-021: Cálculo de total retenido para bloqueo temporal
+    def calcular_total_bloqueo(self, tipo_habitacion: str, noches: int, cantidad_habitaciones: int) -> float:
+        multiplicadores = {
+            "ESTANDAR": 1.0,
+            "DOBLE": 1.25,
+            "SUITE": 1.75,
+            "FAMILIAR": 2.1,
+        }
+        tarifa_noche = self.precio_minimo_noche * multiplicadores[tipo_habitacion]
+        subtotal = tarifa_noche * noches * cantidad_habitaciones
+        return round(subtotal * 1.19, 2)
+
+
+# HU-021: Entidad de dominio para retención temporal de habitación
+class BloqueoHabitacion:
+    def __init__(
+        self,
+        codigo_bloqueo: str,
+        hotel: Hotel,
+        tipo_habitacion: str,
+        fecha_entrada: date,
+        fecha_salida: date,
+        noches: int,
+        cantidad_habitaciones: int,
+        huespedes: int,
+        id_usuario: int,
+        total_retenido: float,
+        minutos_bloqueo: int = 15,
+    ):
+        self.codigo_bloqueo = codigo_bloqueo
+        self.id_hotel = hotel.id_hotel
+        self.nombre_hotel = hotel.nombre
+        self.tipo_habitacion = tipo_habitacion
+        self.fecha_entrada = fecha_entrada
+        self.fecha_salida = fecha_salida
+        self.noches = noches
+        self.cantidad_habitaciones = cantidad_habitaciones
+        self.huespedes = huespedes
+        self.id_usuario = id_usuario
+        self.estado = "BLOQUEADA_TEMPORALMENTE"
+        self.total_retenido = total_retenido
+        self.moneda = hotel.moneda
+        self.expira_en = (
+            datetime.now(timezone.utc) + timedelta(minutes=minutos_bloqueo)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def to_response(self) -> dict:
+        return {
+            "codigo_bloqueo": self.codigo_bloqueo,
+            "id_hotel": self.id_hotel,
+            "nombre_hotel": self.nombre_hotel,
+            "tipo_habitacion": self.tipo_habitacion,
+            "fecha_entrada": self.fecha_entrada,
+            "fecha_salida": self.fecha_salida,
+            "noches": self.noches,
+            "cantidad_habitaciones": self.cantidad_habitaciones,
+            "huespedes": self.huespedes,
+            "id_usuario": self.id_usuario,
+            "estado": self.estado,
+            "total_retenido": self.total_retenido,
+            "moneda": self.moneda,
+            "expira_en": self.expira_en,
+        }

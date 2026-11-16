@@ -1,7 +1,8 @@
 import os
+from datetime import date
 from typing import List, Optional
 from dotenv import load_dotenv
-from app.domain.hotel import Hotel
+from app.domain.hotel import Hotel, BloqueoHabitacion
 
 
 def _verificar_disponibilidad_hoteles(valor_control: str = "") -> None:
@@ -14,6 +15,7 @@ def _verificar_disponibilidad_hoteles(valor_control: str = "") -> None:
 class HotelRepository:
     def __init__(self):
         self._hoteles: List[Hotel] = []
+        self._bloqueos: List[BloqueoHabitacion] = []
         self._seed()
 
     def _seed(self):
@@ -81,13 +83,46 @@ class HotelRepository:
             and (categoria is None or h.categoria == categoria)
         ]
 
-    # HU-019: Obtener hotel por ID
+    # HU-019 y HU-021: Obtener hotel por ID
     def obtener_por_id(self, id_hotel: str) -> Optional[Hotel]:
         _verificar_disponibilidad_hoteles(id_hotel)
         return next(
             (h for h in self._hoteles if h.id_hotel == id_hotel.strip().upper() and h.activo),
             None,
         )
+
+    # HU-021: Registrar bloqueo temporal de habitación en AEX-02
+    def registrar_bloqueo(
+        self,
+        hotel: Hotel,
+        tipo_habitacion: str,
+        fecha_entrada: date,
+        fecha_salida: date,
+        noches: int,
+        cantidad_habitaciones: int,
+        huespedes: int,
+        id_usuario: int,
+        total_retenido: float,
+        minutos_bloqueo: int,
+    ) -> BloqueoHabitacion:
+        _verificar_disponibilidad_hoteles(hotel.id_hotel)
+        hotel.habitaciones_disponibles -= cantidad_habitaciones
+        consecutivo = 500 + len(self._bloqueos) + 1
+        bloqueo = BloqueoHabitacion(
+            codigo_bloqueo=f"BLQ-HT-{consecutivo}",
+            hotel=hotel,
+            tipo_habitacion=tipo_habitacion,
+            fecha_entrada=fecha_entrada,
+            fecha_salida=fecha_salida,
+            noches=noches,
+            cantidad_habitaciones=cantidad_habitaciones,
+            huespedes=huespedes,
+            id_usuario=id_usuario,
+            total_retenido=total_retenido,
+            minutos_bloqueo=minutos_bloqueo,
+        )
+        self._bloqueos.append(bloqueo)
+        return bloqueo
 
 
 hotel_repository = HotelRepository()
