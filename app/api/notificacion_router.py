@@ -15,6 +15,7 @@ from app.repositories.notificacion_repository import notificacion_repository
 router = APIRouter(
     prefix="/api/v1/soporte",
     tags=["Soporte"]
+    tags=["Soporte - Notificaciones"]
 )
 
 # Inyección de dependencias

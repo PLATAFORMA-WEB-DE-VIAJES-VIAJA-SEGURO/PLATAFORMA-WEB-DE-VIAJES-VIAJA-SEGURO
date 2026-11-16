@@ -8,6 +8,8 @@ from app.api.factura_router import router as factura_router
 from app.api.notificacion_router import router as notificacion_router
 from app.api.soporte_router import router as soporte_router
 from app.api.usuario_router import router as usuario_router
+from app.api.documento_viaje_router import router as documento_viaje_router
+from app.api.vuelo_router import router as vuelo_router
 
 app = fastapi.FastAPI(
     title="API Viaja Seguro",
@@ -35,6 +37,9 @@ async def validation_exception_handler(request, exc):
     )
 
 app.include_router(usuario_router)
+app.include_router(vuelo_router)
+app.include_router(documento_viaje_router)
+app.include_router(transaccion_router)
 app.include_router(pago_router)
 app.include_router(transaccion_router)
 app.include_router(factura_router)

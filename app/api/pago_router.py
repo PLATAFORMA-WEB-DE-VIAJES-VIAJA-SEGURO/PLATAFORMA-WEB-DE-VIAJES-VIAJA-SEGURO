@@ -14,7 +14,10 @@ from app.repositories.pago_repository import pago_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",
+
     tags=["Pagos"]
+
+    tags=["Pagos - Medios"]
 )
 
 servicio = PagoService(repo=pago_repository)
