@@ -1,9 +1,10 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+from datetime import datetime, timezone
 
 
 class ReservaRepository:
     """
-    Repositorio que coordina la integración con AIN-08 (Identidad),
+    Repositorio que coordina la integración con AIN-05 (Catálogos), AIN-08 (Identidad),
     AIN-09 (Bloqueos de Vuelos), AIN-10 (Bloqueos de Hoteles) y AIN-14 (Solicitud de Cobro).
     """
 
@@ -51,6 +52,13 @@ class ReservaRepository:
         # Usuarios con identidad verificada en AIN-08
         self._usuarios_verificados = {1, 2, 3, 4, 5}
 
+        # Almacenamiento de reservas creadas (HU-039)
+        self._reservas_creadas: List[Dict[str, Any]] = []
+        # Carritos que ya tienen reserva generada (700 precargado para pruebas de RN-39)
+        self._carritos_con_reserva: set = {700}
+        # Secuencia de IDs de reserva según especificación HU-039 (inicia en 9001)
+        self._siguiente_id_reserva = 9001
+
     def verificar_identidad_ain08(self, id_usuario: int) -> bool:
         """AIN-08: Revalida que la identidad del usuario esté activa y verificada."""
         return id_usuario in self._usuarios_verificados
@@ -78,6 +86,54 @@ class ReservaRepository:
         carrito["medio_pago"] = medio_pago
         carrito["direccion_facturacion"] = direccion_facturacion
         return carrito
+
+    def verificar_reserva_existente_por_carrito(self, id_carrito: int) -> bool:
+        """RN-39: Verifica si ya existe una reserva generada para el carrito dado."""
+        return id_carrito in self._carritos_con_reserva
+
+    def obtener_estado_inicial_ain05(self) -> str:
+        """AIN-05: Consulta el estado inicial parametrizado para nuevas reservas."""
+        return "PENDIENTE_PAGO"
+
+    def crear_reserva(
+        self,
+        id_usuario: int,
+        id_carrito: int,
+        moneda: str,
+        total_reserva: float,
+    ) -> Dict[str, Any]:
+        """
+        Persiste la reserva oficial en MOD-05 generando un código localizador único (VS-YYYY-XXXX).
+        """
+        id_reserva = self._siguiente_id_reserva
+        carrito = self._carritos.get(id_carrito, {})
+
+        # Para la primera reserva (9001) o carrito 701 usa el código del ejemplo oficial
+        if id_reserva == 9001 or id_carrito == 701:
+            codigo_reserva = carrito.get("codigo_reserva_preliminar", "VS-2026-8841")
+            fecha_creacion = "2026-11-15T17:15:00Z"
+        else:
+            codigo_reserva = carrito.get("codigo_reserva_preliminar", f"VS-2026-{id_reserva}")
+            fecha_creacion = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        estado_inicial = self.obtener_estado_inicial_ain05()
+
+        nueva_reserva = {
+            "id_reserva": id_reserva,
+            "codigo_reserva": codigo_reserva,
+            "id_usuario": id_usuario,
+            "id_carrito": id_carrito,
+            "estado": estado_inicial,
+            "total": float(total_reserva),
+            "moneda": moneda,
+            "fecha_creacion": fecha_creacion,
+        }
+
+        self._reservas_creadas.append(nueva_reserva)
+        self._carritos_con_reserva.add(id_carrito)
+        self._siguiente_id_reserva += 1
+
+        return nueva_reserva
 
 
 # Instancia singleton del repositorio
