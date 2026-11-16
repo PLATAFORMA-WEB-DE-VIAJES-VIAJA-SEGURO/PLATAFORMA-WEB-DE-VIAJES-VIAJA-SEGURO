@@ -12,6 +12,7 @@ from app.api.documento_viaje_router import router as documento_viaje_router
 from app.api.vuelo_router import router as vuelo_router
 from app.api.hotel_router import router as hotel_router
 from app.api.reserva_router import router as reserva_router
+from app.api.paquete_router import router as paquete_router
 
 app = fastapi.FastAPI(
     title="API Viaja Seguro",
@@ -42,6 +43,7 @@ app.include_router(usuario_router)
 app.include_router(documento_viaje_router)
 app.include_router(vuelo_router)
 app.include_router(hotel_router)
+app.include_router(paquete_router)
 app.include_router(reserva_router)
 app.include_router(pago_router)
 app.include_router(transaccion_router)
