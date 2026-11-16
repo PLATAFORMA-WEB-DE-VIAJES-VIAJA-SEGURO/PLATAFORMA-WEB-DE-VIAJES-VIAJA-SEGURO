@@ -2,6 +2,28 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
 
+# ── EXCEPCIONES HU-037 (Calcular total de la compra) ────────────
+class ReglaNegocioRN37Exception(Exception):
+    """Excepción cuando el carrito está vacío o contiene servicios expirados (RN-37)."""
+    def __init__(self, mensaje: str = "El carrito está vacío o contiene servicios expirados que impiden liquidar"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class CarritoNoIdentificadoException(Exception):
+    """Excepción cuando no se puede identificar el carrito del usuario o el parámetro es inválido (400)."""
+    def __init__(self, mensaje: str = "No se pudo identificar el carrito del usuario"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class ServiciosCalculoTotalNoDisponiblesException(Exception):
+    """Excepción cuando falla la comunicación con AIN-05 o el cálculo del carrito (503)."""
+    def __init__(self, mensaje: str = "Error al calcular el total de la compra"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
 # ── EXCEPCIONES HU-038 (Cerrar compra) ──────────────────────────
 class ReglaNegocioRN38Exception(Exception):
     """Excepción cuando el carrito ya fue cerrado, el bloqueo caducó o la identidad no es válida (RN-38)."""
@@ -66,6 +88,22 @@ class ServiciosViajerosNoDisponiblesException(Exception):
     def __init__(self, mensaje: str = "No fue posible asociar los viajeros a la reserva"):
         self.mensaje = mensaje
         super().__init__(self.mensaje)
+
+
+# ── MODELOS HU-037 (Calcular total de la compra) ────────────────
+class CalculoTotalData(BaseModel):
+    id_carrito: int = Field(..., description="Identificador del carrito liquidado")
+    moneda: str = Field(..., description="Código ISO de la moneda (ej: COP)")
+    subtotal: float = Field(..., description="Subtotal de los servicios antes de impuestos")
+    impuestos: float = Field(..., description="Valor total de impuestos y tasas aplicables")
+    descuentos: float = Field(..., description="Valor total de descuentos aplicados")
+    total_pagar: float = Field(..., description="Valor total consolidado a pagar")
+
+
+class CalculoTotalResponse(BaseModel):
+    mensaje: str
+    data: Optional[CalculoTotalData] = None
+    success: bool
 
 
 # ── MODELOS HU-038 (Cerrar compra) ──────────────────────────────

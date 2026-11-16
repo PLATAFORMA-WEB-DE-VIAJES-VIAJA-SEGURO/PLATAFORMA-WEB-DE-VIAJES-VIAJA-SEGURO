@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 class ReservaRepository:
     """
     Repositorio que coordina la integración con AIN-01 (Catálogo Documentos),
-    AIN-05 (Catálogos Reserva), AIN-08 (Identidad), AIN-09 (Bloqueos de Vuelos),
+    AIN-05 (Catálogos Reserva y Moneda), AIN-08 (Identidad), AIN-09 (Bloqueos de Vuelos),
     AIN-10 (Bloqueos de Hoteles) y AIN-14 (Solicitud de Cobro).
     """
 
@@ -17,37 +17,70 @@ class ReservaRepository:
                 "id_usuario": 1,
                 "estado_carrito": "ABIERTO",
                 "bloqueos_vigentes": True,
+                "tiene_items_validos": True,
                 "codigo_reserva_preliminar": "VS-2026-8841",
+                "subtotal": 2521008.0,
+                "impuestos": 478992.0,
+                "descuentos": 0.0,
                 "total_liquidado": 3000000.0,
                 "moneda": "COP",
             },
             702: {
                 "id_carrito": 702,
-                "id_usuario": 1,
+                "id_usuario": 2,
                 "estado_carrito": "ABIERTO",
                 "bloqueos_vigentes": True,
+                "tiene_items_validos": True,
                 "codigo_reserva_preliminar": "VS-2026-8842",
+                "subtotal": 1260504.0,
+                "impuestos": 239496.0,
+                "descuentos": 0.0,
                 "total_liquidado": 1500000.0,
                 "moneda": "COP",
             },
             703: {
                 "id_carrito": 703,
-                "id_usuario": 1,
+                "id_usuario": 3,
                 "estado_carrito": "ABIERTO",
                 "bloqueos_vigentes": True,
+                "tiene_items_validos": True,
                 "codigo_reserva_preliminar": "VS-2026-8843",
+                "subtotal": 3529412.0,
+                "impuestos": 670588.0,
+                "descuentos": 0.0,
                 "total_liquidado": 4200000.0,
                 "moneda": "COP",
             },
             700: {
                 "id_carrito": 700,
-                "id_usuario": 1,
+                "id_usuario": 4,
                 "estado_carrito": "CERRADO",
                 "bloqueos_vigentes": False,
+                "tiene_items_validos": False,
                 "codigo_reserva_preliminar": "VS-2026-8800",
-                "total_liquidado": 3000000.0,
+                "subtotal": 0.0,
+                "impuestos": 0.0,
+                "descuentos": 0.0,
+                "total_liquidado": 0.0,
                 "moneda": "COP",
             },
+        }
+
+        # Relación usuario -> carrito activo para HU-037
+        # id_usuario=1,2,3 tienen carritos válidos; id_usuario=4 o 409 tienen carrito vacío/expirado (RN-37)
+        self._carrito_por_usuario: Dict[int, int] = {
+            1: 701,
+            2: 702,
+            3: 703,
+            4: 700,
+            409: 700,
+        }
+
+        # Catálogo de precisión decimal por moneda en AIN-05
+        self._precision_moneda_ain05: Dict[str, int] = {
+            "COP": 1,
+            "USD": 2,
+            "EUR": 2,
         }
 
         # Usuarios con identidad verificada en AIN-08
@@ -99,6 +132,17 @@ class ReservaRepository:
 
         # Tipos de documento válidos en AIN-01
         self._tipos_documento_ain01 = {"CC", "CE", "TI", "PA", "PASAPORTE", "RC", "NIT"}
+
+    def obtener_carrito_por_usuario(self, id_usuario: int) -> Optional[Dict[str, Any]]:
+        """HU-037: Obtiene el carrito asociado al usuario indicado."""
+        id_carrito = self._carrito_por_usuario.get(id_usuario)
+        if id_carrito is None:
+            return None
+        return self._carritos.get(id_carrito)
+
+    def obtener_precision_moneda_ain05(self, moneda: str) -> int:
+        """AIN-05: Retorna la cantidad de decimales de redondeo según la moneda."""
+        return self._precision_moneda_ain05.get(moneda.upper(), 2)
 
     def verificar_identidad_ain08(self, id_usuario: int) -> bool:
         """AIN-08: Revalida que la identidad del usuario esté activa y verificada."""
