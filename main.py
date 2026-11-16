@@ -14,7 +14,6 @@ app = fastapi.FastAPI(
     version="1.0.0"
 )
 
-# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,7 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Manejador global para errores de validación de esquema Pydantic (400 Bad Request)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     return JSONResponse(
@@ -35,7 +33,6 @@ async def validation_exception_handler(request, exc):
         }
     )
 
-# Registrar enrutadores de la API (Compañero + Usuarios)
 app.include_router(usuario_router)
 app.include_router(transaccion_router)
 app.include_router(pago_router)
