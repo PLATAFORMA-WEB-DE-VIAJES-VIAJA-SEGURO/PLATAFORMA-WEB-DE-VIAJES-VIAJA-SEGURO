@@ -60,4 +60,3 @@ def buscar_hoteles(
                 "success": False,
             },
         )
-    

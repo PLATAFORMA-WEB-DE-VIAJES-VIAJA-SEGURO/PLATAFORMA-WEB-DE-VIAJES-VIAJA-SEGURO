@@ -56,7 +56,7 @@ class HotelService:
             categoria=categoria_norm,
         )
 
-        # RN-17: Si no hay disponibilidad hotelera para los criterios solicitados
+        # RN-17: Sin disponibilidad hotelera para los criterios solicitados
         if not resultados:
             raise ErrorReglaNegocioHotel(
                 "No se encontraron hoteles disponibles para el destino, fechas y huéspedes solicitados"
@@ -67,4 +67,3 @@ class HotelService:
             data=[HotelItemOut(**h.to_response()) for h in resultados],
             success=True,
         )
-    
