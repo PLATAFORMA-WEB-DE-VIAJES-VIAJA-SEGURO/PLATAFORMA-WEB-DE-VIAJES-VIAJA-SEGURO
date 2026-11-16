@@ -2,16 +2,17 @@ import fastapi
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from api.pago_router import router as pago_router
 from api.notificacion_router import router as notificacion_router
 from api.soporte_router import router as soporte_router
 
 app = fastapi.FastAPI(
-    title="API Viaja Seguro - Módulo Atención al Cliente (MOD-07)",
-    description="Backend oficial para Soporte, Opiniones y Notificaciones (HU-055 / RN-55 - Enviar notificación).",
+    title="API Viaja Seguro - Módulo de Pagos (MOD-06)",
+    description="Backend oficial para Cobro, Facturación y Reembolsos (HU-045 / RN-45 - Consultar medios de pago).",
     version="1.0.0"
 )
 
-# Configuración de CORS para integración con cualquier frontend
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,28 +21,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Manejador global para errores de validación de esquema Pydantic (Caso 3: 400 Bad Request)
+# Manejador global para errores de validación de parámetros (400 Bad Request)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     return JSONResponse(
         status_code=400,
         content={
-            "mensaje": "El canal de envío, destinatario o plantilla no son válidos",
+            "mensaje": "Código de moneda no soportado",
             "data": None,
             "success": False
         }
     )
 
-# Registrar enrutadores de la API (HU-055 Notificaciones y HU-051 Casos)
+# Registrar enrutadores
+app.include_router(pago_router)
 app.include_router(notificacion_router)
 app.include_router(soporte_router)
 
 @app.get("/", tags=["Root"])
 def root():
     return {
-        "modulo": "Atención al Cliente (MOD-07)",
-        "submodulo": "Soporte, Opiniones y Notificaciones",
-        "historia_activa": "[HU-055] Enviar notificación",
+        "modulo": "Pagos (MOD-06)",
+        "submodulo": "Cobro, Facturación y Reembolsos",
+        "historia_activa": "[HU-045] Consultar medios de pago",
         "version": "1.0.0",
         "docs": "http://127.0.0.1:8000/docs",
         "success": True
