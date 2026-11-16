@@ -14,11 +14,7 @@ from app.repositories.transaccion_repository import transaccion_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",
-
     tags=["Pagos"]
-
-    tags=["Pagos - Transacciones"]
-
 )
 
 servicio = TransaccionService(repo=transaccion_repository)
