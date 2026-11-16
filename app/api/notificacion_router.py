@@ -2,15 +2,15 @@ import os
 from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from domain.notificacion import (
+from app.domain.notificacion import (
     NotificacionCreate,
     NotificacionResponse,
     ReglaNegocioRN55Exception,
     ProveedorNoDisponibleException,
     ValidacionParametrosException
 )
-from service.notificacion_service import NotificacionService
-from repository.notificacion_repository import notificacion_repository
+from app.services.notificacion_service import NotificacionService
+from app.repositories.notificacion_repository import notificacion_repository
 
 router = APIRouter(
     prefix="/api/v1/soporte",

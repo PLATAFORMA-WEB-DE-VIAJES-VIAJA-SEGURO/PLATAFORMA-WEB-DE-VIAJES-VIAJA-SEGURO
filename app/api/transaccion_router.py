@@ -2,15 +2,15 @@ import os
 from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from domain.transaccion import (
+from app.domain.transaccion import (
     TransaccionCreate,
     TransaccionResponse,
     ReglaNegocioRN47Exception,
     DatosPagoInvalidosException,
     PasarelaNoDisponibleException
 )
-from service.transaccion_service import TransaccionService
-from repository.transaccion_repository import transaccion_repository
+from app.services.transaccion_service import TransaccionService
+from app.repositories.transaccion_repository import transaccion_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",

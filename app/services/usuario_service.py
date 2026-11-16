@@ -4,6 +4,9 @@ from app.domain.usuario import (
     UsuarioCreate,
     UsuarioDataOut,
     RegistroUsuarioOut,
+    UsuarioLogin,
+    LoginDataOut,
+    LoginUsuarioOut,
     TIPOS_DOCUMENTO_VALIDOS,
     PAISES_VALIDOS,
     MUNICIPIOS_VALIDOS,
@@ -17,6 +20,10 @@ class ErrorCatalogoInvalido(Exception):
 
 
 class ErrorCorreoDuplicado(Exception):
+    pass
+
+
+class ErrorCredencialesInvalidas(Exception):
     pass
 
 
@@ -59,6 +66,31 @@ class UsuarioService:
         return RegistroUsuarioOut(
             mensaje="Usuario registrado exitosamente",
             data=UsuarioDataOut(**usuario_creado.to_response()),
+            success=True,
+        )
+
+    def iniciar_sesion(self, datos: UsuarioLogin) -> LoginUsuarioOut:
+        usuario = self.repo.obtener_por_correo(datos.correo)
+
+        # RN-02: Verifica existencia, estado ACTIVO y coincidencia de hash
+        if not usuario or not usuario.esta_activo() or not usuario.verificar_password(datos.password):
+            raise ErrorCredencialesInvalidas(
+                "Credenciales inválidas o cuenta inactiva"
+            )
+
+        token = Usuario.generar_token_sesion()
+
+        return LoginUsuarioOut(
+            mensaje="Inicio de sesión exitoso",
+            data=LoginDataOut(
+                token=token,
+                tipo_token="Bearer",
+                id_usuario=usuario.id_usuario,
+                nombres=usuario.nombres,
+                apellidos=usuario.apellidos,
+                correo=usuario.correo,
+                rol=usuario.rol,
+            ),
             success=True,
         )
 
