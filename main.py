@@ -7,6 +7,7 @@ from app.api.pago_router import router as pago_router
 from app.api.notificacion_router import router as notificacion_router
 from app.api.soporte_router import router as soporte_router
 from app.api.usuario_router import router as usuario_router
+from app.api.documento_viaje_router import router as documento_viaje_router
 
 app = fastapi.FastAPI(
     title="API Viaja Seguro",
@@ -34,6 +35,7 @@ async def validation_exception_handler(request, exc):
     )
 
 app.include_router(usuario_router)
+app.include_router(documento_viaje_router)
 app.include_router(transaccion_router)
 app.include_router(pago_router)
 app.include_router(notificacion_router)
@@ -51,3 +53,4 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    
