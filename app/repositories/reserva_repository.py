@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 
 class ReservaRepository:
     """
-    Repositorio que coordina la integración con AIN-05 (Catálogos), AIN-08 (Identidad),
-    AIN-09 (Bloqueos de Vuelos), AIN-10 (Bloqueos de Hoteles) y AIN-14 (Solicitud de Cobro).
+    Repositorio que coordina la integración con AIN-01 (Catálogo Documentos),
+    AIN-05 (Catálogos Reserva), AIN-08 (Identidad), AIN-09 (Bloqueos de Vuelos),
+    AIN-10 (Bloqueos de Hoteles) y AIN-14 (Solicitud de Cobro).
     """
 
     def __init__(self):
@@ -58,6 +59,46 @@ class ReservaRepository:
         self._carritos_con_reserva: set = {700}
         # Secuencia de IDs de reserva según especificación HU-039 (inicia en 9001)
         self._siguiente_id_reserva = 9001
+
+        # Reservas base precargadas para pruebas directas de HU-040 en Swagger UI
+        self._reservas_base: Dict[int, Dict[str, Any]] = {
+            9001: {
+                "id_reserva": 9001,
+                "codigo_reserva": "VS-2026-8841",
+                "id_usuario": 1,
+                "estado": "PENDIENTE_PAGO",
+                "total": 3000000.0,
+                "moneda": "COP",
+                "cupos_reservados": 2,
+                "viajeros": [],
+                "estado_nominacion": "PENDIENTE",
+            },
+            9002: {
+                "id_reserva": 9002,
+                "codigo_reserva": "VS-2026-8842",
+                "id_usuario": 1,
+                "estado": "PENDIENTE_PAGO",
+                "total": 1500000.0,
+                "moneda": "COP",
+                "cupos_reservados": 2,
+                "viajeros": [],
+                "estado_nominacion": "PENDIENTE",
+            },
+            9003: {
+                "id_reserva": 9003,
+                "codigo_reserva": "VS-2026-8843",
+                "id_usuario": 1,
+                "estado": "PENDIENTE_PAGO",
+                "total": 4200000.0,
+                "moneda": "COP",
+                "cupos_reservados": 2,
+                "viajeros": [],
+                "estado_nominacion": "PENDIENTE",
+            },
+        }
+
+        # Tipos de documento válidos en AIN-01
+        self._tipos_documento_ain01 = {"CC", "CE", "TI", "PA", "PASAPORTE", "RC", "NIT"}
 
     def verificar_identidad_ain08(self, id_usuario: int) -> bool:
         """AIN-08: Revalida que la identidad del usuario esté activa y verificada."""
@@ -127,13 +168,39 @@ class ReservaRepository:
             "total": float(total_reserva),
             "moneda": moneda,
             "fecha_creacion": fecha_creacion,
+            "cupos_reservados": 2,
+            "viajeros": [],
+            "estado_nominacion": "PENDIENTE",
         }
 
         self._reservas_creadas.append(nueva_reserva)
+        self._reservas_base[id_reserva] = nueva_reserva
         self._carritos_con_reserva.add(id_carrito)
         self._siguiente_id_reserva += 1
 
         return nueva_reserva
+
+    def validar_tipo_documento_ain01(self, tipo_documento: str) -> bool:
+        """AIN-01: Verifica que el tipo de documento exista en el catálogo oficial."""
+        return tipo_documento.strip().upper() in self._tipos_documento_ain01
+
+    def obtener_reserva_por_id(self, id_reserva: int) -> Optional[Dict[str, Any]]:
+        """Busca una reserva por su ID en las creadas en sesión o en el catálogo base."""
+        for r in self._reservas_creadas:
+            if r["id_reserva"] == id_reserva:
+                return r
+        return self._reservas_base.get(id_reserva)
+
+    def registrar_viajeros_en_reserva(
+        self,
+        id_reserva: int,
+        viajeros: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Persiste el listado de viajeros nominados en la reserva y actualiza su estado a COMPLETA."""
+        reserva = self.obtener_reserva_por_id(id_reserva)
+        reserva["viajeros"] = viajeros
+        reserva["estado_nominacion"] = "COMPLETA"
+        return reserva
 
 
 # Instancia singleton del repositorio

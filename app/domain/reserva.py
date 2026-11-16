@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -42,6 +42,28 @@ class DatosReservaInvalidosException(Exception):
 class ServiciosReservaNoDisponiblesException(Exception):
     """Excepción cuando las dependencias AIN-05, AIN-08, AIN-09 o AIN-10 no responden (503)."""
     def __init__(self, mensaje: str = "No fue posible crear la reserva en este momento"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+# ── EXCEPCIONES HU-040 (Registrar viajeros) ─────────────────────
+class ReglaNegocioRN40Exception(Exception):
+    """Excepción cuando la cantidad de viajeros no coincide con los cupos o hay documentos duplicados (RN-40)."""
+    def __init__(self, mensaje: str = "La cantidad de viajeros no coincide con los cupos o hay documentos duplicados"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class DatosViajerosInvalidosException(Exception):
+    """Excepción para datos de viajeros incompletos o tipo de documento inválido (400)."""
+    def __init__(self, mensaje: str = "Datos de viajeros incompletos o tipo de documento inválido"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class ServiciosViajerosNoDisponiblesException(Exception):
+    """Excepción cuando las dependencias AIN-01 o AIN-05 no responden al asociar viajeros (503)."""
+    def __init__(self, mensaje: str = "No fue posible asociar los viajeros a la reserva"):
         self.mensaje = mensaje
         super().__init__(self.mensaje)
 
@@ -103,4 +125,31 @@ class ReservaData(BaseModel):
 class ReservaResponse(BaseModel):
     mensaje: str
     data: Optional[ReservaData] = None
+    success: bool
+
+
+# ── MODELOS HU-040 (Registrar viajeros) ─────────────────────────
+class ViajeroItem(BaseModel):
+    nombres: str = Field(..., description="Nombres del viajero")
+    apellidos: str = Field(..., description="Apellidos del viajero")
+    tipo_documento: str = Field(..., description="Tipo de documento según AIN-01 (ej: CC, CE, PA, TI)")
+    numero_documento: str = Field(..., description="Número de documento legal del viajero")
+    fecha_nacimiento: str = Field(..., description="Fecha de nacimiento en formato YYYY-MM-DD")
+    es_titular: bool = Field(False, description="Indica si el viajero es el titular de la reserva")
+
+
+class RegistrarViajerosCreate(BaseModel):
+    viajeros: List[ViajeroItem] = Field(..., min_length=1, description="Listado de viajeros a asociar en la reserva")
+
+
+class RegistrarViajerosData(BaseModel):
+    id_reserva: int = Field(..., description="Identificador de la reserva")
+    codigo_reserva: str = Field(..., description="Código localizador de la reserva (ej: VS-2026-8841)")
+    total_viajeros_registrados: int = Field(..., description="Cantidad total de viajeros registrados")
+    estado_nominacion: str = Field(..., description="Estado de nominación de la reserva (COMPLETA)")
+
+
+class RegistrarViajerosResponse(BaseModel):
+    mensaje: str
+    data: Optional[RegistrarViajerosData] = None
     success: bool
