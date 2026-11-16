@@ -1,5 +1,10 @@
 import re
+from typing import Optional
 from app.domain.reserva import (
+    CalculoTotalData,
+    CalculoTotalResponse,
+    ReglaNegocioRN37Exception,
+    CarritoNoIdentificadoException,
     CierreCarritoCreate,
     CierreCarritoData,
     CierreCarritoResponse,
@@ -33,6 +38,51 @@ MONEDAS_PERMITIDAS = {"COP", "USD", "EUR"}
 class ReservaService:
     def __init__(self, repo: ReservaRepository):
         self.repo = repo
+
+    # ── HU-037: Calcular total de la compra ─────────────────────────
+    def calcular_total_compra(self, id_usuario: Optional[int]) -> CalculoTotalResponse:
+        # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
+        if id_usuario is None or id_usuario <= 0:
+            raise CarritoNoIdentificadoException(
+                "No se pudo identificar el carrito del usuario"
+            )
+
+        carrito = self.repo.obtener_carrito_por_usuario(id_usuario)
+        if not carrito:
+            raise CarritoNoIdentificadoException(
+                "No se pudo identificar el carrito del usuario"
+            )
+
+        # ── REGLA DE NEGOCIO RN-37 (409 Conflict) ──────────────────────
+        # El carrito debe tener ítems válidos y sus bloqueos/servicios no deben haber expirado
+        if not carrito.get("tiene_items_validos", False) or not carrito.get("bloqueos_vigentes", False):
+            raise ReglaNegocioRN37Exception(
+                "El carrito está vacío o contiene servicios expirados que impiden liquidar"
+            )
+
+        # ── CÁLCULO FINANCIERO CON PRECISIÓN DECIMAL (AIN-05) ───────────
+        moneda = carrito.get("moneda", "COP")
+        decimales = self.repo.obtener_precision_moneda_ain05(moneda)
+
+        subtotal = round(float(carrito.get("subtotal", 2521008.0)), decimales)
+        impuestos = round(float(carrito.get("impuestos", 478992.0)), decimales)
+        descuentos = round(float(carrito.get("descuentos", 0.0)), decimales)
+        total_pagar = round(subtotal + impuestos - descuentos, decimales)
+
+        data = CalculoTotalData(
+            id_carrito=carrito["id_carrito"],
+            moneda=moneda,
+            subtotal=subtotal,
+            impuestos=impuestos,
+            descuentos=descuentos,
+            total_pagar=total_pagar,
+        )
+
+        return CalculoTotalResponse(
+            mensaje="Total de la compra calculado exitosamente",
+            data=data,
+            success=True,
+        )
 
     # ── HU-038: Cerrar compra ───────────────────────────────────────
     def cerrar_compra(self, datos: CierreCarritoCreate) -> CierreCarritoResponse:

@@ -1,8 +1,13 @@
 import os
+from typing import Optional
 from dotenv import load_dotenv
-from fastapi import APIRouter, Path, status
+from fastapi import APIRouter, Path, Query, status
 from fastapi.responses import JSONResponse
 from app.domain.reserva import (
+    CalculoTotalResponse,
+    ReglaNegocioRN37Exception,
+    CarritoNoIdentificadoException,
+    ServiciosCalculoTotalNoDisponiblesException,
     CierreCarritoCreate,
     CierreCarritoResponse,
     ReglaNegocioRN38Exception,
@@ -28,6 +33,66 @@ router = APIRouter(
 )
 
 servicio = ReservaService(repo=reserva_repository)
+
+# Documentación OpenAPI para HU-037 (Calcular total de la compra)
+RESPUESTAS_OPENAPI_CALCULAR_TOTAL = {
+    200: {
+        "description": "Total de la compra calculado exitosamente",
+        "model": CalculoTotalResponse,
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Total de la compra calculado exitosamente",
+                    "data": {
+                        "id_carrito": 701,
+                        "moneda": "COP",
+                        "subtotal": 2521008.0,
+                        "impuestos": 478992.0,
+                        "descuentos": 0.0,
+                        "total_pagar": 3000000.0,
+                    },
+                    "success": True,
+                }
+            }
+        },
+    },
+    400: {
+        "description": "No se pudo identificar el carrito del usuario",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No se pudo identificar el carrito del usuario",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "Error por Regla de Negocio RN-37 (El carrito está vacío o contiene servicios expirados)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El carrito está vacío o contiene servicios expirados que impiden liquidar",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de Disponibilidad (Error al calcular el total de la compra)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Error al calcular el total de la compra",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
 
 # Documentación OpenAPI para HU-038 (Cerrar compra)
 RESPUESTAS_OPENAPI_CIERRE_COMPRA = {
@@ -208,6 +273,77 @@ RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS = {
 }
 
 
+@router.get(
+    "/carrito/total",
+    response_model=CalculoTotalResponse,
+    status_code=status.HTTP_200_OK,
+    responses=RESPUESTAS_OPENAPI_CALCULAR_TOTAL,
+    summary="Calcular total de la compra (HU-037)",
+    description="Liquida matemáticamente el valor exacto consolidado del carrito incluyendo subtotal, impuestos y descuentos aplicando precisión decimal según AIN-05 y validando RN-37.",
+)
+def calcular_total_compra(
+    id_usuario: Optional[int] = Query(default=1, description="Identificador del usuario titular del carrito (ej: 1)"),
+):
+    load_dotenv(override=True)
+    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+
+    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
+    es_simulacion_falla = id_usuario == 503
+
+    if simular_falla_env or es_simulacion_falla:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "Error al calcular el total de la compra",
+                "data": None,
+                "success": False,
+            },
+        )
+
+    try:
+        return servicio.calcular_total_compra(id_usuario=id_usuario)
+    except ReglaNegocioRN37Exception as e:
+        # Caso 2: Error por Regla de Negocio RN-37 -> 409 Conflict
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except CarritoNoIdentificadoException as e:
+        # Caso 3: Error de Validación o Parámetros -> 400 Bad Request
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except ServiciosCalculoTotalNoDisponiblesException as e:
+        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except Exception:
+        # Fallos imprevistos ocultando trazas técnicas -> 503
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "Error al calcular el total de la compra",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
 @router.post(
     "/carrito/cierre",
     response_model=CierreCarritoResponse,
@@ -322,12 +458,8 @@ def registrar_viajeros(
     payload: RegistrarViajerosCreate,
     id_reserva: int = Path(..., gt=0, description="Identificador único de la reserva (ej: 9001)"),
 ):
-    # Recargar variables de entorno dinámicamente
     load_dotenv(override=True)
     simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-
-    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
-    # Se activa con SIMULAR_FALLA_SERVIDOR="True" en .env o enviando id_reserva=503
     es_simulacion_falla = id_reserva == 503
 
     if simular_falla_env or es_simulacion_falla:
@@ -343,37 +475,21 @@ def registrar_viajeros(
     try:
         return servicio.registrar_viajeros(id_reserva=id_reserva, datos=payload)
     except ReglaNegocioRN40Exception as e:
-        # Caso 2: Error por Regla de Negocio RN-40 -> 409 Conflict
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except DatosViajerosInvalidosException as e:
-        # Caso 3: Error de Validación -> 400 Bad Request
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except ServiciosViajerosNoDisponiblesException as e:
-        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except Exception:
-        # Fallos imprevistos ocultando trazas técnicas -> 503
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
