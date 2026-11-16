@@ -14,7 +14,7 @@ from repository.soporte_repository import soporte_repository
 
 router = APIRouter(
     prefix="/api/v1/soporte",
-    tags=["Soporte - Casos"]
+    tags=["Soporte"]
 )
 
 # Inyección de dependencias

@@ -6,6 +6,7 @@ from api.transaccion_router import router as transaccion_router
 from api.pago_router import router as pago_router
 from api.notificacion_router import router as notificacion_router
 from api.soporte_router import router as soporte_router
+from api.factura_router import router as factura_router
 from app.api.usuario_router import router as usuario_router
 
 app = fastapi.FastAPI(
@@ -34,10 +35,11 @@ async def validation_exception_handler(request, exc):
     )
 
 app.include_router(usuario_router)
-app.include_router(transaccion_router)
 app.include_router(pago_router)
-app.include_router(notificacion_router)
+app.include_router(transaccion_router)
+app.include_router(factura_router)
 app.include_router(soporte_router)
+app.include_router(notificacion_router)
 
 @app.get("/", tags=["Root"])
 def root():
