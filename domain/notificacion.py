@@ -1,4 +1,3 @@
-import re
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
@@ -9,35 +8,27 @@ class ReglaNegocioRN55Exception(Exception):
         super().__init__(self.mensaje)
 
 class ProveedorNoDisponibleException(Exception):
-    """Excepción lanzada cuando el proveedor externo AEX-06 no responde."""
+    """Excepción lanzada cuando el proveedor externo AEX-06 no responde (503)."""
     def __init__(self, mensaje: str = "El proveedor externo de mensajería no responde en este momento"):
         self.mensaje = mensaje
         super().__init__(self.mensaje)
 
 class ValidacionParametrosException(Exception):
-    """Excepción lanzada cuando los parámetros son inválidos."""
+    """Excepción lanzada cuando los parámetros son inválidos (400)."""
     def __init__(self, mensaje: str = "El canal de envío, destinatario o plantilla no son válidos"):
         self.mensaje = mensaje
         super().__init__(self.mensaje)
 
 class NotificacionCreate(BaseModel):
     id_usuario: int = Field(..., gt=0, description="Identificador del usuario destinatario")
-    canal: str = Field(..., min_length=2, description="Canal de envío (EMAIL o SMS)")
-    destinatario: str = Field(..., min_length=3, description="Dirección de correo o número telefónico")
-    plantilla: str = Field(..., min_length=2, description="Código de la plantilla activa")
+    canal: str = Field(..., min_length=1, description="Canal de envío (EMAIL o SMS)")
+    destinatario: str = Field(..., min_length=1, description="Dirección de correo o número telefónico")
+    plantilla: str = Field(..., min_length=1, description="Código de la plantilla activa")
     variables: Dict[str, Any] = Field(default_factory=dict, description="Variables para interpolación")
 
-    @field_validator("canal")
+    @field_validator("canal", "destinatario", "plantilla")
     @classmethod
-    def normalizar_canal(cls, v: str) -> str:
-        canal_limpio = v.strip().upper()
-        if canal_limpio not in ("EMAIL", "SMS"):
-            raise ValueError("Canal no permitido. Debe ser EMAIL o SMS.")
-        return canal_limpio
-
-    @field_validator("destinatario", "plantilla")
-    @classmethod
-    def limpiar_texto(cls, v: str) -> str:
+    def validar_no_vacio(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("El campo no puede estar vacío.")
         return v.strip()

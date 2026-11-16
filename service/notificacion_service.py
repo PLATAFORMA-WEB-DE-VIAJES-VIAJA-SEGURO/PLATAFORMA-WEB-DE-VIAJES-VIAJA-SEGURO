@@ -13,16 +13,24 @@ class NotificacionService:
         self.repo = repo
 
     def enviar_notificacion(self, datos: NotificacionCreate) -> NotificacionResponse:
-        canal = datos.canal.upper()
+        canal = datos.canal.strip().upper()
         destinatario = datos.destinatario.strip()
         plantilla = datos.plantilla.strip().upper()
 
-        # ── REGLA DE NEGOCIO RN-55 ──────────────────────────────────────
-        # 1. Validación de Canal Soportado (EMAIL o SMS)
-        if canal not in ("EMAIL", "SMS"):
-            raise ReglaNegocioRN55Exception("Canal no soportado. Los canales permitidos por RN-55 son EMAIL o SMS.")
+        # ── VALIDACIÓN DE PARÁMETROS BÁSICOS (400 Bad Request) ─────────
+        if not canal or not destinatario or not plantilla:
+            raise ValidacionParametrosException(
+                "El canal de envío, destinatario o plantilla no son válidos"
+            )
 
-        # 2. Validación de Formato de Destinatario Compatible con el Canal
+        # ── REGLA DE NEGOCIO RN-55 (409 Conflict) ──────────────────────
+        # 1. Canal no soportado (RN-55 solo permite EMAIL o SMS)
+        if canal not in ("EMAIL", "SMS"):
+            raise ReglaNegocioRN55Exception(
+                "Canal no soportado. Los canales permitidos por RN-55 son EMAIL o SMS."
+            )
+
+        # 2. Formato de destinatario incompatible con el canal seleccionado (RN-55)
         if canal == "EMAIL":
             patron_email = r"^[\w\.-]+@[\w\.-]+\.\w+$"
             if not re.match(patron_email, destinatario):
@@ -36,13 +44,13 @@ class NotificacionService:
                     "Formato de número telefónico incompatible con el canal SMS (RN-55)."
                 )
 
-        # 3. Validación de Plantilla Activa en Catálogo AIN-07
+        # 3. Validación de plantilla activa en el catálogo AIN-07
         if not self.repo.es_plantilla_activa(plantilla):
             raise ReglaNegocioRN55Exception(
                 f"La plantilla '{datos.plantilla}' no se encuentra activa en el catálogo (RN-55)."
             )
 
-        # 4. Validación de Bloqueo de Destinatario o Límite de Reintentos
+        # 4. Destinatario bloqueado o límite de reintentos superado (RN-55)
         if self.repo.esta_bloqueado(destinatario):
             raise ReglaNegocioRN55Exception(
                 "El destinatario ha bloqueado notificaciones o se superó el límite de reintentos"
@@ -57,7 +65,7 @@ class NotificacionService:
             variables=datos.variables
         )
 
-        # ── ESTRUCTURACIÓN DE RESPUESTA ESTANDARIZADA (201 Created) ────
+        # ── RESPUESTA ESTANDARIZADA (201 Created) ───────────────────────
         data_response = NotificacionData(
             id_notificacion=registro["id_notificacion"],
             canal=registro["canal"],
