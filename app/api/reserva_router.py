@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Path, status
 from fastapi.responses import JSONResponse
 from app.domain.reserva import (
     CierreCarritoCreate,
@@ -13,6 +13,11 @@ from app.domain.reserva import (
     ReglaNegocioRN39Exception,
     DatosReservaInvalidosException,
     ServiciosReservaNoDisponiblesException,
+    RegistrarViajerosCreate,
+    RegistrarViajerosResponse,
+    ReglaNegocioRN40Exception,
+    DatosViajerosInvalidosException,
+    ServiciosViajerosNoDisponiblesException,
 )
 from app.services.reserva_service import ReservaService
 from app.repositories.reserva_repository import reserva_repository
@@ -144,6 +149,64 @@ RESPUESTAS_OPENAPI_CREAR_RESERVA = {
     },
 }
 
+# Documentación OpenAPI para HU-040 (Registrar viajeros)
+RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS = {
+    201: {
+        "description": "Viajeros registrados en la reserva exitosamente",
+        "model": RegistrarViajerosResponse,
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Viajeros registrados en la reserva exitosamente",
+                    "data": {
+                        "id_reserva": 9001,
+                        "codigo_reserva": "VS-2026-8841",
+                        "total_viajeros_registrados": 2,
+                        "estado_nominacion": "COMPLETA",
+                    },
+                    "success": True,
+                }
+            }
+        },
+    },
+    400: {
+        "description": "Datos de viajeros incompletos o tipo de documento inválido",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Datos de viajeros incompletos o tipo de documento inválido",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "Error por Regla de Negocio RN-40 (Cantidad de viajeros no coincide con cupos o documentos duplicados)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "La cantidad de viajeros no coincide con los cupos o hay documentos duplicados",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de Disponibilidad (Indisponibilidad de servicios AIN-01 o AIN-05)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible asociar los viajeros a la reserva",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
 
 @router.post(
     "/carrito/cierre",
@@ -205,12 +268,8 @@ def cerrar_compra(payload: CierreCarritoCreate):
     description="Crea el registro maestro de la reserva con un código único localizador (VS-YYYY-XXXX) en estado PENDIENTE_PAGO consultando AIN-05 y validando RN-39.",
 )
 def crear_reserva(payload: ReservaCreate):
-    # Recargar variables de entorno dinámicamente
     load_dotenv(override=True)
     simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-
-    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
-    # Se activa con SIMULAR_FALLA_SERVIDOR="True" en .env o enviando id_carrito=503 o id_usuario=503
     es_simulacion_falla = payload.id_carrito == 503 or payload.id_usuario == 503
 
     if simular_falla_env or es_simulacion_falla:
@@ -226,7 +285,65 @@ def crear_reserva(payload: ReservaCreate):
     try:
         return servicio.crear_reserva(payload)
     except ReglaNegocioRN39Exception as e:
-        # Caso 2: Error por Regla de Negocio RN-39 -> 409 Conflict
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except DatosReservaInvalidosException as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except ServiciosReservaNoDisponiblesException as e:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible crear la reserva en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+@router.post(
+    "/{id_reserva}/viajeros",
+    response_model=RegistrarViajerosResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS,
+    summary="Registrar viajeros (HU-040)",
+    description="Registra el listado nominal de viajeros en la reserva validando tipos de documento en AIN-01 y verificando coincidencia de cupos y unicidad de documento bajo RN-40.",
+)
+def registrar_viajeros(
+    payload: RegistrarViajerosCreate,
+    id_reserva: int = Path(..., gt=0, description="Identificador único de la reserva (ej: 9001)"),
+):
+    # Recargar variables de entorno dinámicamente
+    load_dotenv(override=True)
+    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+
+    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
+    # Se activa con SIMULAR_FALLA_SERVIDOR="True" en .env o enviando id_reserva=503
+    es_simulacion_falla = id_reserva == 503
+
+    if simular_falla_env or es_simulacion_falla:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible asociar los viajeros a la reserva",
+                "data": None,
+                "success": False,
+            },
+        )
+
+    try:
+        return servicio.registrar_viajeros(id_reserva=id_reserva, datos=payload)
+    except ReglaNegocioRN40Exception as e:
+        # Caso 2: Error por Regla de Negocio RN-40 -> 409 Conflict
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
@@ -235,7 +352,7 @@ def crear_reserva(payload: ReservaCreate):
                 "success": False,
             },
         )
-    except DatosReservaInvalidosException as e:
+    except DatosViajerosInvalidosException as e:
         # Caso 3: Error de Validación -> 400 Bad Request
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -245,7 +362,7 @@ def crear_reserva(payload: ReservaCreate):
                 "success": False,
             },
         )
-    except ServiciosReservaNoDisponiblesException as e:
+    except ServiciosViajerosNoDisponiblesException as e:
         # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -260,7 +377,7 @@ def crear_reserva(payload: ReservaCreate):
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
-                "mensaje": "No fue posible crear la reserva en este momento",
+                "mensaje": "No fue posible asociar los viajeros a la reserva",
                 "data": None,
                 "success": False,
             },
