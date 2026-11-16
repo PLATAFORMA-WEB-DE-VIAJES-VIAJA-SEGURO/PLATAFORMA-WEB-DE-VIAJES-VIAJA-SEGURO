@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-from domain.soporte import ServicioNoDisponibleException
+from app.domain.soporte import ServicioNoDisponibleException
 
 class SoporteRepository:
     """

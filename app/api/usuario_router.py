@@ -1,11 +1,18 @@
 from typing import List
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
-from app.domain.usuario import UsuarioCreate, UsuarioDataOut, RegistroUsuarioOut
+from app.domain.usuario import (
+    UsuarioCreate,
+    UsuarioDataOut,
+    RegistroUsuarioOut,
+    UsuarioLogin,
+    LoginUsuarioOut,
+)
 from app.services.usuario_service import (
     UsuarioService,
     ErrorCatalogoInvalido,
     ErrorCorreoDuplicado,
+    ErrorCredencialesInvalidas,
 )
 from app.repositories.usuario_repository import usuario_repository
 
@@ -42,6 +49,32 @@ def registrar_usuario(datos: UsuarioCreate):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "No fue posible completar el registro en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+@router.post(
+    "/login",
+    response_model=LoginUsuarioOut,
+    status_code=status.HTTP_200_OK,
+    summary="Iniciar sesión",
+    description="Autentica al usuario verificando que la cuenta esté activa (RN-02) y retorna un token de sesión.",
+)
+def iniciar_sesion(datos: UsuarioLogin):
+    try:
+        return service.iniciar_sesion(datos)
+    except ErrorCredencialesInvalidas as e:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible iniciar sesión en este momento",
                 "data": None,
                 "success": False,
             },

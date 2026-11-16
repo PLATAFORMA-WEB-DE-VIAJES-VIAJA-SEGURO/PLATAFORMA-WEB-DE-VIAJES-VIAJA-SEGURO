@@ -1,12 +1,12 @@
 import re
-from domain.notificacion import (
+from app.domain.notificacion import (
     NotificacionCreate,
     NotificacionResponse,
     NotificacionData,
     ReglaNegocioRN55Exception,
     ValidacionParametrosException
 )
-from repository.notificacion_repository import NotificacionRepository
+from app.repositories.notificacion_repository import NotificacionRepository
 
 class NotificacionService:
     def __init__(self, repo: NotificacionRepository):

@@ -1,11 +1,11 @@
-from domain.transaccion import (
+from app.domain.transaccion import (
     TransaccionCreate,
     TransaccionResponse,
     TransaccionData,
     ReglaNegocioRN47Exception,
     DatosPagoInvalidosException
 )
-from repository.transaccion_repository import TransaccionRepository
+from app.repositories.transaccion_repository import TransaccionRepository
 
 class TransaccionService:
     def __init__(self, repo: TransaccionRepository):

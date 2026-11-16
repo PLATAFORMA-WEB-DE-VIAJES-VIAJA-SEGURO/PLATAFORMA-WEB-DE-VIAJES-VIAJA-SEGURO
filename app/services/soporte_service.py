@@ -1,11 +1,11 @@
-from domain.soporte import (
+from app.domain.soporte import (
     CasoSoporteCreate,
     CasoSoporteResponse,
     CasoSoporteData,
     ReglaNegocioRN51Exception,
     ValidacionParametrosException
 )
-from repository.soporte_repository import SoporteRepository
+from app.repositories.soporte_repository import SoporteRepository
 
 class SoporteService:
     def __init__(self, repo: SoporteRepository):

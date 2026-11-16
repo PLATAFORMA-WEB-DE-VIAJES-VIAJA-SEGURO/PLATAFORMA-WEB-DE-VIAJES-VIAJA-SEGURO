@@ -1,12 +1,12 @@
 import re
-from domain.pago import (
+from app.domain.pago import (
     MediosPagoResponse,
     MediosPagoData,
     MedioPagoItem,
     MonedaNoSoportadaException,
     ReglaNegocioRN45Exception
 )
-from repository.pago_repository import PagoRepository
+from app.repositories.pago_repository import PagoRepository
 
 class PagoService:
     def __init__(self, repo: PagoRepository):

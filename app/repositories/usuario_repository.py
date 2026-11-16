@@ -1,5 +1,14 @@
+import os
 from typing import Optional, List
+from dotenv import load_dotenv
 from app.domain.usuario import Usuario
+
+
+def _verificar_disponibilidad(correo: str = "") -> None:
+    load_dotenv(override=True)
+    falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
+    if falla_env or correo.lower().strip() == "fallo_proveedor@email.com":
+        raise RuntimeError("Fallo de disponibilidad en el almacenamiento de MOD-01")
 
 
 class UsuarioRepository:
@@ -9,7 +18,7 @@ class UsuarioRepository:
         self._seed()
 
     def _seed(self):
-        usuario_inicial = Usuario(
+        usuario_activo = Usuario(
             id_usuario=1,
             nombres="Carlos",
             apellidos="Mendoza",
@@ -22,13 +31,36 @@ class UsuarioRepository:
             rol="VIAJERO",
             estado="ACTIVO",
         )
-        self._datos.append(usuario_inicial)
-        self._siguiente_id = 2
+        usuario_inactivo = Usuario(
+            id_usuario=2,
+            nombres="Andrea",
+            apellidos="Rojas",
+            correo="inactivo@viajaseguro.com",
+            password_hash=Usuario.encriptar_password("Viaja2026*"),
+            tipo_documento="CC",
+            numero_documento="1098111999",
+            pais="CO",
+            municipio="BGA",
+            rol="VIAJERO",
+            estado="INACTIVO",
+        )
+        self._datos.extend([usuario_activo, usuario_inactivo])
+        self._siguiente_id = 3
 
     def obtener_todos(self) -> List[Usuario]:
+        _verificar_disponibilidad()
         return [u for u in self._datos if u.esta_activo()]
 
+    def obtener_por_correo(self, correo: str) -> Optional[Usuario]:
+        _verificar_disponibilidad(correo)
+        correo_norm = correo.lower().strip()
+        return next(
+            (u for u in self._datos if u.correo == correo_norm),
+            None,
+        )
+
     def obtener_activo_por_correo(self, correo: str) -> Optional[Usuario]:
+        _verificar_disponibilidad(correo)
         correo_norm = correo.lower().strip()
         return next(
             (u for u in self._datos if u.correo == correo_norm and u.esta_activo()),
@@ -46,8 +78,8 @@ class UsuarioRepository:
         pais: str,
         municipio: str,
         rol: str,
-        
     ) -> Usuario:
+        _verificar_disponibilidad(correo)
         nuevo = Usuario(
             id_usuario=self._siguiente_id,
             nombres=nombres,

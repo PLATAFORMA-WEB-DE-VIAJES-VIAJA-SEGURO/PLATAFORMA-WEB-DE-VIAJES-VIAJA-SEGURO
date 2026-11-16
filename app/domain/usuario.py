@@ -1,6 +1,12 @@
+"""
+Módulo de Usuarios - Dominio y esquemas de validación.
+Incluye reglas de negocio de registro (RN-01) e inicio de sesión (RN-02).
+"""
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 import hashlib
+import secrets
 
 TIPOS_DOCUMENTO_VALIDOS = {"CC", "CE", "PA", "TI"}
 PAISES_VALIDOS = {"CO", "MX", "PE", "AR", "CL", "ES", "US"}
@@ -8,6 +14,7 @@ MUNICIPIOS_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG"}
 ROLES_VALIDOS = {"VIAJERO", "ASESOR", "ADMIN"}
 
 
+# --- ESQUEMAS HU-001: REGISTRO ---
 class UsuarioCreate(BaseModel):
     nombres: str = Field(..., min_length=2, max_length=80)
     apellidos: str = Field(..., min_length=2, max_length=80)
@@ -51,6 +58,29 @@ class RegistroUsuarioOut(BaseModel):
     success: bool
 
 
+# --- ESQUEMAS HU-002: INICIAR SESIÓN ---
+class UsuarioLogin(BaseModel):
+    correo: EmailStr
+    password: str = Field(..., min_length=1)
+
+
+class LoginDataOut(BaseModel):
+    token: str
+    tipo_token: str
+    id_usuario: int
+    nombres: str
+    apellidos: str
+    correo: str
+    rol: str
+
+
+class LoginUsuarioOut(BaseModel):
+    mensaje: str
+    data: Optional[LoginDataOut] = None
+    success: bool
+
+
+# --- ENTIDAD DE DOMINIO ---
 class Usuario:
     def __init__(
         self,
@@ -81,6 +111,13 @@ class Usuario:
     @staticmethod
     def encriptar_password(password_plano: str) -> str:
         return hashlib.sha256(password_plano.encode("utf-8")).hexdigest()
+
+    def verificar_password(self, password_plano: str) -> bool:
+        return self.password_hash == self.encriptar_password(password_plano)
+
+    @staticmethod
+    def generar_token_sesion() -> str:
+        return f"vs_tok_{secrets.token_urlsafe(32)}"
 
     def esta_activo(self) -> bool:
         return self.estado == "ACTIVO"
