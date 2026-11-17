@@ -6,6 +6,11 @@ from app.domain.reserva import (
     ItemCarritoResponse,
     ReglaNegocioRN33Exception,
     DatosItemCarritoInvalidosException,
+    DetalleItemCarrito,
+    ConsultaCarritoData,
+    ConsultaCarritoResponse,
+    ReglaNegocioRN35Exception,
+    UsuarioCarritoInvalidoException,
     CalculoTotalData,
     CalculoTotalResponse,
     ReglaNegocioRN37Exception,
@@ -98,6 +103,54 @@ class ReservaService:
 
         return ItemCarritoResponse(
             mensaje="Ítem agregado al carrito exitosamente",
+            data=data,
+            success=True,
+        )
+
+    # ── HU-035: Consultar carrito ───────────────────────────────────
+    def consultar_carrito(self, id_usuario: Optional[int]) -> ConsultaCarritoResponse:
+        # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
+        if id_usuario is None or id_usuario <= 0:
+            raise UsuarioCarritoInvalidoException(
+                "Identificador de usuario inválido o faltante"
+            )
+
+        carrito = self.repo.obtener_carrito_por_usuario(id_usuario)
+        if not carrito:
+            raise UsuarioCarritoInvalidoException(
+                "Identificador de usuario inválido o faltante"
+            )
+
+        # ── REGLA DE NEGOCIO RN-35 (409 Conflict) ──────────────────────
+        # Verificar que ningún bloqueo temporal del carrito haya expirado
+        if not carrito.get("bloqueos_vigentes", False):
+            raise ReglaNegocioRN35Exception(
+                "El carrito contiene ítems cuyos bloqueos temporales han expirado"
+            )
+
+        # ── CONSTRUCCIÓN DE RESPUESTA ESTANDARIZADA (200 OK) ────────────
+        items_raw = carrito.get("items_consulta", [])
+        items = [
+            DetalleItemCarrito(
+                id_item=item["id_item"],
+                tipo_servicio=item["tipo_servicio"],
+                descripcion=item["descripcion"],
+                cantidad=item["cantidad"],
+                subtotal=float(item["subtotal"]),
+            )
+            for item in items_raw
+        ]
+
+        data = ConsultaCarritoData(
+            id_carrito=carrito["id_carrito"],
+            id_usuario=carrito["id_usuario"],
+            moneda=carrito["moneda"],
+            estado=carrito["estado_carrito"],
+            items=items,
+        )
+
+        return ConsultaCarritoResponse(
+            mensaje="Carrito consultado exitosamente",
             data=data,
             success=True,
         )
