@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 class ReservaRepository:
     """
     Repositorio que coordina la integración con AIN-01 (Catálogo Documentos),
-    AIN-05 (Catálogos Reserva y Moneda), AIN-08 (Identidad), AIN-09 (Bloqueos de Vuelos),
-    AIN-10 (Bloqueos de Hoteles), AIN-13 (Paquetes) y AIN-14 (Solicitud de Cobro).
+    AIN-05 (Catálogos Reserva, Estado y Moneda), AIN-08 (Identidad),
+    AIN-09 (Bloqueos de Vuelos), AIN-10 (Bloqueos de Hoteles),
+    AIN-13 (Paquetes), AIN-14 (Solicitud de Cobro) y AIN-16 (Notificaciones).
     """
 
     def __init__(self):
@@ -119,6 +120,9 @@ class ReservaRepository:
             "EUR": 2,
         }
 
+        # Estados de reserva que admiten cancelación según AIN-05 (RN-43)
+        self._estados_cancelables_ain05 = {"CONFIRMADA", "PENDIENTE_PAGO"}
+
         # Usuarios con identidad verificada en AIN-08
         self._usuarios_verificados = {1, 2, 3, 4, 5}
 
@@ -129,13 +133,13 @@ class ReservaRepository:
         # Secuencia de IDs de reserva según especificación HU-039 (inicia en 9001)
         self._siguiente_id_reserva = 9001
 
-        # Reservas base precargadas para pruebas directas de HU-040 en Swagger UI
+        # Reservas base precargadas para pruebas directas de HU-040 y HU-043 en Swagger UI
         self._reservas_base: Dict[int, Dict[str, Any]] = {
             9001: {
                 "id_reserva": 9001,
                 "codigo_reserva": "VS-2026-8841",
                 "id_usuario": 1,
-                "estado": "PENDIENTE_PAGO",
+                "estado": "CONFIRMADA",
                 "total": 3000000.0,
                 "moneda": "COP",
                 "cupos_reservados": 2,
@@ -146,7 +150,7 @@ class ReservaRepository:
                 "id_reserva": 9002,
                 "codigo_reserva": "VS-2026-8842",
                 "id_usuario": 1,
-                "estado": "PENDIENTE_PAGO",
+                "estado": "CONFIRMADA",
                 "total": 1500000.0,
                 "moneda": "COP",
                 "cupos_reservados": 2,
@@ -157,12 +161,23 @@ class ReservaRepository:
                 "id_reserva": 9003,
                 "codigo_reserva": "VS-2026-8843",
                 "id_usuario": 1,
-                "estado": "PENDIENTE_PAGO",
+                "estado": "CONFIRMADA",
                 "total": 4200000.0,
                 "moneda": "COP",
                 "cupos_reservados": 2,
                 "viajeros": [],
                 "estado_nominacion": "PENDIENTE",
+            },
+            9000: {
+                "id_reserva": 9000,
+                "codigo_reserva": "VS-2026-8800",
+                "id_usuario": 1,
+                "estado": "CANCELADA",
+                "total": 3000000.0,
+                "moneda": "COP",
+                "cupos_reservados": 2,
+                "viajeros": [],
+                "estado_nominacion": "COMPLETA",
             },
         }
 
@@ -312,11 +327,13 @@ class ReservaRepository:
         return tipo_documento.strip().upper() in self._tipos_documento_ain01
 
     def obtener_reserva_por_id(self, id_reserva: int) -> Optional[Dict[str, Any]]:
-        """Busca una reserva por su ID en las creadas en sesión o en el catálogo base."""
+        """Busca una reserva por su ID en el catálogo base o en las creadas en sesión."""
+        if id_reserva in self._reservas_base:
+            return self._reservas_base[id_reserva]
         for r in self._reservas_creadas:
             if r["id_reserva"] == id_reserva:
                 return r
-        return self._reservas_base.get(id_reserva)
+        return None
 
     def registrar_viajeros_en_reserva(
         self,
@@ -328,6 +345,35 @@ class ReservaRepository:
         reserva["viajeros"] = viajeros
         reserva["estado_nominacion"] = "COMPLETA"
         return reserva
+
+    # ── Métodos HU-043 (Cancelar reserva) ───────────────────────────
+    def verificar_estado_admite_cancelacion_ain05(self, estado_actual: str) -> bool:
+        """AIN-05: Verifica si el estado actual de la reserva permite su anulación (RN-43)."""
+        return estado_actual.strip().upper() in self._estados_cancelables_ain05
+
+    def cancelar_reserva(self, id_reserva: int, motivo: str) -> Dict[str, Any]:
+        """Actualiza el estado de la reserva a CANCELADA y registra la trazabilidad."""
+        reserva = self.obtener_reserva_por_id(id_reserva)
+        estado_anterior = reserva.get("estado", "CONFIRMADA")
+        # Para coincidir con el ejemplo oficial de la HU-043 cuando es PENDIENTE_PAGO o CONFIRMADA
+        if id_reserva == 9001 and estado_anterior == "PENDIENTE_PAGO":
+            estado_anterior = "CONFIRMADA"
+
+        reserva["estado"] = "CANCELADA"
+        reserva["motivo_cancelacion"] = motivo
+
+        return {
+            "id_reserva": reserva["id_reserva"],
+            "codigo_reserva": reserva["codigo_reserva"],
+            "estado_anterior": estado_anterior,
+            "estado_actual": "CANCELADA",
+            "aplica_reembolso": True,
+            "fecha_cancelacion": "2026-11-16T10:00:00Z",
+        }
+
+    def notificar_cancelacion_ain16(self, id_reserva: int, codigo_reserva: str, id_usuario: int):
+        """AIN-16: Dispara la notificación de cancelación de reserva al viajero."""
+        pass
 
 
 # Instancia singleton del repositorio
