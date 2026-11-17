@@ -24,6 +24,28 @@ class ServiciosCarritoNoDisponiblesException(Exception):
         super().__init__(self.mensaje)
 
 
+# ── EXCEPCIONES HU-035 (Consultar carrito) ──────────────────────
+class ReglaNegocioRN35Exception(Exception):
+    """Excepción cuando el carrito contiene ítems cuyos bloqueos temporales han expirado (RN-35)."""
+    def __init__(self, mensaje: str = "El carrito contiene ítems cuyos bloqueos temporales han expirado"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class UsuarioCarritoInvalidoException(Exception):
+    """Excepción cuando el identificador de usuario es inválido o faltante (400)."""
+    def __init__(self, mensaje: str = "Identificador de usuario inválido o faltante"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class ServiciosConsultaCarritoNoDisponiblesException(Exception):
+    """Excepción cuando falla la recuperación del carrito de compras (503)."""
+    def __init__(self, mensaje: str = "No fue posible recuperar el carrito de compras"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
 # ── EXCEPCIONES HU-037 (Calcular total de la compra) ────────────
 class ReglaNegocioRN37Exception(Exception):
     """Excepción cuando el carrito está vacío o contiene servicios expirados (RN-37)."""
@@ -142,6 +164,29 @@ class ItemCarritoData(BaseModel):
 class ItemCarritoResponse(BaseModel):
     mensaje: str
     data: Optional[ItemCarritoData] = None
+    success: bool
+
+
+# ── MODELOS HU-035 (Consultar carrito) ──────────────────────────
+class DetalleItemCarrito(BaseModel):
+    id_item: int = Field(..., description="Identificador de la línea en el carrito")
+    tipo_servicio: str = Field(..., description="Tipo de servicio (ej: VUELO, HOTEL)")
+    descripcion: str = Field(..., description="Descripción del servicio seleccionado")
+    cantidad: int = Field(..., description="Cantidad de unidades o pasajeros")
+    subtotal: float = Field(..., description="Subtotal de la línea")
+
+
+class ConsultaCarritoData(BaseModel):
+    id_carrito: int = Field(..., description="Identificador único del carrito")
+    id_usuario: int = Field(..., description="Identificador del usuario titular")
+    moneda: str = Field(..., description="Código ISO de la moneda (ej: COP)")
+    estado: str = Field(..., description="Estado actual del carrito (ej: ABIERTO)")
+    items: List[DetalleItemCarrito] = Field(..., description="Listado de ítems activos en el carrito")
+
+
+class ConsultaCarritoResponse(BaseModel):
+    mensaje: str
+    data: Optional[ConsultaCarritoData] = None
     success: bool
 
 

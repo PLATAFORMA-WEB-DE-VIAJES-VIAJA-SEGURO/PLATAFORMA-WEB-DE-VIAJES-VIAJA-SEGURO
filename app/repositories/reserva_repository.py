@@ -10,6 +10,24 @@ class ReservaRepository:
     """
 
     def __init__(self):
+        # Ítems precargados para la consulta del carrito (HU-035)
+        self._items_default_701 = [
+            {
+                "id_item": 1,
+                "tipo_servicio": "VUELO",
+                "descripcion": "Vuelo BOG - CTG (2 pasajeros)",
+                "cantidad": 2,
+                "subtotal": 900000.0,
+            },
+            {
+                "id_item": 2,
+                "tipo_servicio": "HOTEL",
+                "descripcion": "Hotel Caribe Cartagena (5 noches)",
+                "cantidad": 1,
+                "subtotal": 2100000.0,
+            },
+        ]
+
         # Catálogo de carritos en memoria para pruebas funcionales en Swagger UI
         self._carritos: Dict[int, Dict[str, Any]] = {
             701: {
@@ -25,6 +43,7 @@ class ReservaRepository:
                 "total_liquidado": 3000000.0,
                 "moneda": "COP",
                 "items": [],
+                "items_consulta": list(self._items_default_701),
             },
             702: {
                 "id_carrito": 702,
@@ -39,6 +58,7 @@ class ReservaRepository:
                 "total_liquidado": 1500000.0,
                 "moneda": "COP",
                 "items": [],
+                "items_consulta": list(self._items_default_701),
             },
             703: {
                 "id_carrito": 703,
@@ -53,6 +73,7 @@ class ReservaRepository:
                 "total_liquidado": 4200000.0,
                 "moneda": "COP",
                 "items": [],
+                "items_consulta": list(self._items_default_701),
             },
             700: {
                 "id_carrito": 700,
@@ -67,6 +88,7 @@ class ReservaRepository:
                 "total_liquidado": 0.0,
                 "moneda": "COP",
                 "items": [],
+                "items_consulta": [],
             },
         }
 
@@ -193,9 +215,9 @@ class ReservaRepository:
         nuevo_item["total_items_carrito"] = len(carrito["items"])
         return nuevo_item
 
-    # ── Métodos HU-037 (Calcular total de la compra) ────────────────
+    # ── Métodos HU-035 y HU-037 (Consultar y Calcular carrito) ──────
     def obtener_carrito_por_usuario(self, id_usuario: int) -> Optional[Dict[str, Any]]:
-        """HU-037: Obtiene el carrito asociado al usuario indicado."""
+        """HU-035 / HU-037: Obtiene el carrito asociado al usuario indicado."""
         id_carrito = self._carrito_por_usuario.get(id_usuario)
         if id_carrito is None:
             return None
