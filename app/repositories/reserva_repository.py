@@ -6,7 +6,7 @@ class ReservaRepository:
     """
     Repositorio que coordina la integración con AIN-01 (Catálogo Documentos),
     AIN-05 (Catálogos Reserva y Moneda), AIN-08 (Identidad), AIN-09 (Bloqueos de Vuelos),
-    AIN-10 (Bloqueos de Hoteles) y AIN-14 (Solicitud de Cobro).
+    AIN-10 (Bloqueos de Hoteles), AIN-13 (Paquetes) y AIN-14 (Solicitud de Cobro).
     """
 
     def __init__(self):
@@ -24,6 +24,7 @@ class ReservaRepository:
                 "descuentos": 0.0,
                 "total_liquidado": 3000000.0,
                 "moneda": "COP",
+                "items": [],
             },
             702: {
                 "id_carrito": 702,
@@ -37,6 +38,7 @@ class ReservaRepository:
                 "descuentos": 0.0,
                 "total_liquidado": 1500000.0,
                 "moneda": "COP",
+                "items": [],
             },
             703: {
                 "id_carrito": 703,
@@ -50,6 +52,7 @@ class ReservaRepository:
                 "descuentos": 0.0,
                 "total_liquidado": 4200000.0,
                 "moneda": "COP",
+                "items": [],
             },
             700: {
                 "id_carrito": 700,
@@ -63,17 +66,28 @@ class ReservaRepository:
                 "descuentos": 0.0,
                 "total_liquidado": 0.0,
                 "moneda": "COP",
+                "items": [],
             },
         }
 
-        # Relación usuario -> carrito activo para HU-037
-        # id_usuario=1,2,3 tienen carritos válidos; id_usuario=4 o 409 tienen carrito vacío/expirado (RN-37)
+        # Relación usuario -> carrito activo
         self._carrito_por_usuario: Dict[int, int] = {
             1: 701,
             2: 702,
             3: 703,
             4: 700,
             409: 700,
+        }
+
+        # Control de ítems agregados al carrito para HU-033 (RN-33)
+        self._siguiente_id_item = 1
+        self._bloqueos_en_carrito: set = set()
+        self._bloqueos_expirados: set = {
+            "BLK-EXPIRADO",
+            "BLK-V-0000",
+            "BLK-H-0000",
+            "BLK-P-0000",
+            "BLK-409",
         }
 
         # Catálogo de precisión decimal por moneda en AIN-05
@@ -133,6 +147,53 @@ class ReservaRepository:
         # Tipos de documento válidos en AIN-01
         self._tipos_documento_ain01 = {"CC", "CE", "TI", "PA", "PASAPORTE", "RC", "NIT"}
 
+    # ── Métodos HU-033 (Agregar ítem al carrito) ────────────────────
+    def verificar_bloqueo_servicio_vigente(self, id_referencia_bloqueo: str) -> bool:
+        """AIN-09 / AIN-10 / AIN-13: Verifica si el bloqueo temporal del servicio está vigente."""
+        ref = id_referencia_bloqueo.strip().upper()
+        return ref not in self._bloqueos_expirados
+
+    def verificar_bloqueo_duplicado_en_carrito(self, id_referencia_bloqueo: str) -> bool:
+        """RN-33: Verifica si el mismo bloqueo ya fue agregado previamente al carrito."""
+        ref = id_referencia_bloqueo.strip().upper()
+        return ref in self._bloqueos_en_carrito
+
+    def agregar_item_al_carrito(
+        self,
+        id_usuario: int,
+        tipo_servicio: str,
+        id_referencia_bloqueo: str,
+        descripcion: str,
+        cantidad: int,
+        precio_unitario: float,
+    ) -> Dict[str, Any]:
+        """Agrega un nuevo ítem validado al carrito activo del usuario."""
+        id_carrito = self._carrito_por_usuario.get(id_usuario, 701)
+        carrito = self._carritos.get(id_carrito, self._carritos[701])
+
+        id_item = self._siguiente_id_item
+        subtotal = round(float(cantidad) * float(precio_unitario), 1)
+        ref = id_referencia_bloqueo.strip().upper()
+
+        nuevo_item = {
+            "id_carrito": carrito["id_carrito"],
+            "id_item": id_item,
+            "tipo_servicio": tipo_servicio,
+            "id_referencia_bloqueo": ref,
+            "descripcion": descripcion,
+            "cantidad": cantidad,
+            "precio_unitario": float(precio_unitario),
+            "subtotal": subtotal,
+        }
+
+        carrito.setdefault("items", []).append(nuevo_item)
+        self._bloqueos_en_carrito.add(ref)
+        self._siguiente_id_item += 1
+
+        nuevo_item["total_items_carrito"] = len(carrito["items"])
+        return nuevo_item
+
+    # ── Métodos HU-037 (Calcular total de la compra) ────────────────
     def obtener_carrito_por_usuario(self, id_usuario: int) -> Optional[Dict[str, Any]]:
         """HU-037: Obtiene el carrito asociado al usuario indicado."""
         id_carrito = self._carrito_por_usuario.get(id_usuario)
@@ -144,6 +205,7 @@ class ReservaRepository:
         """AIN-05: Retorna la cantidad de decimales de redondeo según la moneda."""
         return self._precision_moneda_ain05.get(moneda.upper(), 2)
 
+    # ── Métodos HU-038, HU-039 y HU-040 ─────────────────────────────
     def verificar_identidad_ain08(self, id_usuario: int) -> bool:
         """AIN-08: Revalida que la identidad del usuario esté activa y verificada."""
         return id_usuario in self._usuarios_verificados
@@ -193,7 +255,6 @@ class ReservaRepository:
         id_reserva = self._siguiente_id_reserva
         carrito = self._carritos.get(id_carrito, {})
 
-        # Para la primera reserva (9001) o carrito 701 usa el código del ejemplo oficial
         if id_reserva == 9001 or id_carrito == 701:
             codigo_reserva = carrito.get("codigo_reserva_preliminar", "VS-2026-8841")
             fecha_creacion = "2026-11-15T17:15:00Z"

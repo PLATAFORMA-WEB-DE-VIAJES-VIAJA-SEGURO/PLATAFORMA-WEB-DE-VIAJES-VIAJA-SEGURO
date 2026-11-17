@@ -2,6 +2,28 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
 
+# ── EXCEPCIONES HU-033 (Agregar ítem al carrito) ────────────────
+class ReglaNegocioRN33Exception(Exception):
+    """Excepción cuando el bloqueo temporal expiró o el ítem ya está en el carrito (RN-33)."""
+    def __init__(self, mensaje: str = "El bloqueo temporal del servicio ha expirado o el ítem ya está en el carrito"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class DatosItemCarritoInvalidosException(Exception):
+    """Excepción cuando el tipo de servicio, cantidad o referencia de bloqueo no son válidos (400)."""
+    def __init__(self, mensaje: str = "El tipo de servicio, cantidad o referencia de bloqueo no son válidos"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class ServiciosCarritoNoDisponiblesException(Exception):
+    """Excepción cuando falla la comunicación con AIN-09, AIN-10 o AIN-13 al actualizar el carrito (503)."""
+    def __init__(self, mensaje: str = "No fue posible actualizar el carrito de compras en este momento"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
 # ── EXCEPCIONES HU-037 (Calcular total de la compra) ────────────
 class ReglaNegocioRN37Exception(Exception):
     """Excepción cuando el carrito está vacío o contiene servicios expirados (RN-37)."""
@@ -88,6 +110,39 @@ class ServiciosViajerosNoDisponiblesException(Exception):
     def __init__(self, mensaje: str = "No fue posible asociar los viajeros a la reserva"):
         self.mensaje = mensaje
         super().__init__(self.mensaje)
+
+
+# ── MODELOS HU-033 (Agregar ítem al carrito) ────────────────────
+class ItemCarritoCreate(BaseModel):
+    id_usuario: int = Field(..., gt=0, description="Identificador del viajero titular del carrito")
+    tipo_servicio: str = Field(..., min_length=2, description="Tipo de servicio (ej: VUELO, HOTEL, PAQUETE)")
+    id_referencia_bloqueo: str = Field(..., min_length=3, description="Identificador del bloqueo vigente (ej: BLK-V-9001)")
+    descripcion: str = Field(..., min_length=3, description="Descripción comercial del servicio")
+    cantidad: int = Field(..., gt=0, description="Cantidad de cupos o unidades del servicio")
+    precio_unitario: float = Field(..., gt=0, description="Precio unitario del servicio")
+
+    @field_validator("tipo_servicio", "id_referencia_bloqueo", "descripcion")
+    @classmethod
+    def validar_texto_no_vacio(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("El campo no puede estar vacío.")
+        return v.strip()
+
+
+class ItemCarritoData(BaseModel):
+    id_carrito: int = Field(..., description="Identificador del carrito activo")
+    id_item: int = Field(..., description="Identificador de la línea agregada al carrito")
+    tipo_servicio: str = Field(..., description="Tipo de servicio agregado")
+    id_referencia_bloqueo: str = Field(..., description="Referencia del bloqueo asociado")
+    cantidad: int = Field(..., description="Cantidad agregada")
+    subtotal: float = Field(..., description="Subtotal calculado para el ítem (cantidad * precio_unitario)")
+    total_items_carrito: int = Field(..., description="Cantidad total de ítems acumulados en el carrito")
+
+
+class ItemCarritoResponse(BaseModel):
+    mensaje: str
+    data: Optional[ItemCarritoData] = None
+    success: bool
 
 
 # ── MODELOS HU-037 (Calcular total de la compra) ────────────────

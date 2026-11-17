@@ -1,6 +1,11 @@
 import re
 from typing import Optional
 from app.domain.reserva import (
+    ItemCarritoCreate,
+    ItemCarritoData,
+    ItemCarritoResponse,
+    ReglaNegocioRN33Exception,
+    DatosItemCarritoInvalidosException,
     CalculoTotalData,
     CalculoTotalResponse,
     ReglaNegocioRN37Exception,
@@ -23,6 +28,8 @@ from app.domain.reserva import (
 )
 from app.repositories.reserva_repository import ReservaRepository
 
+TIPOS_SERVICIO_PERMITIDOS = {"VUELO", "HOTEL", "PAQUETE", "ACTIVIDAD"}
+
 MEDIOS_PAGO_PERMITIDOS = {
     "TARJETA_CREDITO",
     "TARJETA_DEBITO",
@@ -38,6 +45,62 @@ MONEDAS_PERMITIDAS = {"COP", "USD", "EUR"}
 class ReservaService:
     def __init__(self, repo: ReservaRepository):
         self.repo = repo
+
+    # ── HU-033: Agregar ítem al carrito ─────────────────────────────
+    def agregar_item_carrito(self, datos: ItemCarritoCreate) -> ItemCarritoResponse:
+        tipo_servicio = (datos.tipo_servicio or "").strip().upper()
+        ref_bloqueo = (datos.id_referencia_bloqueo or "").strip().upper()
+        descripcion = (datos.descripcion or "").strip()
+
+        # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
+        if (
+            tipo_servicio not in TIPOS_SERVICIO_PERMITIDOS
+            or datos.cantidad <= 0
+            or datos.precio_unitario <= 0
+            or not ref_bloqueo.startswith("BLK-")
+        ):
+            raise DatosItemCarritoInvalidosException(
+                "El tipo de servicio, cantidad o referencia de bloqueo no son válidos"
+            )
+
+        # ── REGLA DE NEGOCIO RN-33 (409 Conflict) ──────────────────────
+        # 1. Verificar que el bloqueo temporal siga vigente (AIN-09, AIN-10, AIN-13)
+        if not self.repo.verificar_bloqueo_servicio_vigente(ref_bloqueo):
+            raise ReglaNegocioRN33Exception(
+                "El bloqueo temporal del servicio ha expirado o el ítem ya está en el carrito"
+            )
+
+        # 2. Verificar que el mismo bloqueo no haya sido agregado ya al carrito
+        if self.repo.verificar_bloqueo_duplicado_en_carrito(ref_bloqueo):
+            raise ReglaNegocioRN33Exception(
+                "El bloqueo temporal del servicio ha expirado o el ítem ya está en el carrito"
+            )
+
+        # ── REGISTRO DEL ÍTEM EN EL CARRITO (201 Created) ──────────────
+        item = self.repo.agregar_item_al_carrito(
+            id_usuario=datos.id_usuario,
+            tipo_servicio=tipo_servicio,
+            id_referencia_bloqueo=ref_bloqueo,
+            descripcion=descripcion,
+            cantidad=datos.cantidad,
+            precio_unitario=datos.precio_unitario,
+        )
+
+        data = ItemCarritoData(
+            id_carrito=item["id_carrito"],
+            id_item=item["id_item"],
+            tipo_servicio=item["tipo_servicio"],
+            id_referencia_bloqueo=item["id_referencia_bloqueo"],
+            cantidad=item["cantidad"],
+            subtotal=item["subtotal"],
+            total_items_carrito=item["total_items_carrito"],
+        )
+
+        return ItemCarritoResponse(
+            mensaje="Ítem agregado al carrito exitosamente",
+            data=data,
+            success=True,
+        )
 
     # ── HU-037: Calcular total de la compra ─────────────────────────
     def calcular_total_compra(self, id_usuario: Optional[int]) -> CalculoTotalResponse:
