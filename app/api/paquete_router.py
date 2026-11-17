@@ -1,10 +1,11 @@
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Path, Query, status
 from fastapi.responses import JSONResponse
 from app.domain.paquete import (
     ConsultaDestinosOut,
     ConsultaActividadesOut,
+    DisponibilidadActividadOut,
 )
 from app.services.paquete_service import (
     PaqueteService,
@@ -97,6 +98,46 @@ def consultar_actividades_destino(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "El servicio de operadores locales (AEX-03) no está disponible en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+# HU-027: Verificar cupo y tarifa de actividad
+@router.get(
+    "/actividades/{id_actividad}/disponibilidad",
+    response_model=DisponibilidadActividadOut,
+    status_code=status.HTTP_200_OK,
+    summary="Verificar cupo y tarifa de actividad",
+    description="Valida en tiempo real el aforo disponible y calcula la tarifa total con impuestos en AEX-03 y moneda PAR-07 vía AIN-04 (RN-27).",
+)
+def verificar_cupo_tarifa_actividad(
+    id_actividad: str = Path(..., min_length=3, max_length=20, description="Identificador de la actividad (ej. ACT-401)"),
+    fecha_actividad: date = Query(..., description="Fecha programada de la actividad (YYYY-MM-DD)"),
+    cantidad_personas: int = Query(default=2, ge=1, le=20, description="Cantidad de asistentes (1 a 20)"),
+):
+    try:
+        return service.verificar_cupo_tarifa_actividad(
+            id_actividad=id_actividad,
+            fecha_actividad=fecha_actividad,
+            cantidad_personas=cantidad_personas,
+        )
+    except ErrorParametrosPaquete as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except ErrorReglaNegocioPaquete as e:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible verificar la disponibilidad y tarifa de la actividad en AEX-03",
                 "data": None,
                 "success": False,
             },

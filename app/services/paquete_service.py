@@ -5,10 +5,13 @@ from app.domain.paquete import (
     MUNICIPIOS_PAQUETE_VALIDOS,
     TIPOS_PAQUETE_VALIDOS,
     CATEGORIAS_ACTIVIDAD_VALIDAS,
+    MONEDAS_PAQUETE_AIN04,
     DestinoItemOut,
     ConsultaDestinosOut,
     ActividadItemOut,
     ConsultaActividadesOut,
+    DisponibilidadActividadDataOut,
+    DisponibilidadActividadOut,
 )
 from app.repositories.paquete_repository import PaqueteRepository
 
@@ -101,7 +104,6 @@ class PaqueteService:
             categoria=categoria_norm,
         )
 
-        # RN-26: El destino debe contar con actividades vigentes en operadores locales (AEX-03)
         if not actividades:
             raise ErrorReglaNegocioPaquete(
                 "No se encontraron actividades disponibles en AEX-03 para el destino y criterios indicados"
@@ -110,5 +112,45 @@ class PaqueteService:
         return ConsultaActividadesOut(
             mensaje="Actividades del destino consultadas exitosamente",
             data=[ActividadItemOut(**a.to_response()) for a in actividades],
+            success=True,
+        )
+
+    # HU-027: Verificar cupo y tarifa de actividad (RN-27)
+    def verificar_cupo_tarifa_actividad(
+        self,
+        id_actividad: str,
+        fecha_actividad: date,
+        cantidad_personas: int = 2,
+    ) -> DisponibilidadActividadOut:
+        if fecha_actividad < date.today():
+            raise ErrorParametrosPaquete(
+                "La fecha solicitada para la actividad no puede ser anterior a la fecha actual"
+            )
+
+        actividad = self.repo.obtener_actividad_por_id(id_actividad)
+        if not actividad:
+            raise ErrorReglaNegocioPaquete(
+                "La actividad solicitada no existe o fue desactivada por el operador local"
+            )
+
+        if actividad.moneda not in MONEDAS_PAQUETE_AIN04:
+            raise ErrorReglaNegocioPaquete(
+                "La moneda de la tarifa no está habilitada en el catálogo PAR-07 (AIN-04)"
+            )
+
+        # RN-27: Validar aforo suficiente en el operador local (AEX-03)
+        if actividad.cupos_diarios < cantidad_personas:
+            raise ErrorReglaNegocioPaquete(
+                "No hay cupos suficientes disponibles para la cantidad de personas solicitada en esta actividad"
+            )
+
+        detalle = actividad.calcular_disponibilidad_tarifa(
+            fecha_actividad=fecha_actividad,
+            cantidad_personas=cantidad_personas,
+        )
+
+        return DisponibilidadActividadOut(
+            mensaje="Cupo y tarifa de actividad verificados exitosamente",
+            data=DisponibilidadActividadDataOut(**detalle),
             success=True,
         )

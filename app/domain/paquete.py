@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -45,6 +46,27 @@ class ActividadItemOut(BaseModel):
 class ConsultaActividadesOut(BaseModel):
     mensaje: str
     data: Optional[List[ActividadItemOut]] = None
+    success: bool
+
+
+# HU-027: Esquemas de verificación de cupo y tarifa de actividad
+class DisponibilidadActividadDataOut(BaseModel):
+    id_actividad: str
+    nombre_actividad: str
+    id_destino: str
+    fecha_actividad: date
+    cantidad_personas: int
+    cupos_disponibles: int
+    tarifa_unitaria: float
+    impuestos: float
+    total_actividad: float
+    moneda: str
+    disponible: bool
+
+
+class DisponibilidadActividadOut(BaseModel):
+    mensaje: str
+    data: Optional[DisponibilidadActividadDataOut] = None
     success: bool
 
 
@@ -130,4 +152,22 @@ class Actividad:
             "cupos_diarios": self.cupos_diarios,
             "precio_persona": self.precio_persona,
             "moneda": self.moneda,
+        }
+
+    # HU-027: Cálculo de tarifa consolidada y verificación de aforo
+    def calcular_disponibilidad_tarifa(self, fecha_actividad: date, cantidad_personas: int) -> dict:
+        subtotal = round(self.precio_persona * cantidad_personas, 2)
+        impuestos = round(subtotal * 0.19, 2)
+        return {
+            "id_actividad": self.id_actividad,
+            "nombre_actividad": self.nombre,
+            "id_destino": self.id_destino,
+            "fecha_actividad": fecha_actividad,
+            "cantidad_personas": cantidad_personas,
+            "cupos_disponibles": self.cupos_diarios,
+            "tarifa_unitaria": self.precio_persona,
+            "impuestos": impuestos,
+            "total_actividad": round(subtotal + impuestos, 2),
+            "moneda": self.moneda,
+            "disponible": self.cupos_diarios >= cantidad_personas,
         }

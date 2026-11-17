@@ -7,7 +7,7 @@ from app.domain.paquete import Destino, Actividad
 def _verificar_disponibilidad_paquetes(valor_control: str = "") -> None:
     load_dotenv(override=True)
     falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
-    if falla_env or valor_control.strip().upper() in {"503", "DST-503"}:
+    if falla_env or valor_control.strip().upper() in {"503", "DST-503", "ACT-503"}:
         raise RuntimeError("Fallo de conexión con el servicio externo AEX-03 / catálogo de paquetes")
 
 
@@ -155,6 +155,14 @@ class PaqueteRepository:
             and a.cupos_diarios > 0
             and (categoria is None or a.categoria == categoria)
         ]
+
+    # HU-027: Obtener actividad por ID en AEX-03
+    def obtener_actividad_por_id(self, id_actividad: str) -> Optional[Actividad]:
+        _verificar_disponibilidad_paquetes(id_actividad)
+        return next(
+            (a for a in self._actividades if a.id_actividad == id_actividad.strip().upper() and a.activa),
+            None,
+        )
 
 
 paquete_repository = PaqueteRepository()
