@@ -30,6 +30,11 @@ from app.domain.reserva import (
     RegistrarViajerosResponse,
     ReglaNegocioRN40Exception,
     DatosViajerosInvalidosException,
+    CancelarReservaCreate,
+    CancelarReservaData,
+    CancelarReservaResponse,
+    ReglaNegocioRN43Exception,
+    MotivoCancelacionInvalidoException,
 )
 from app.repositories.reserva_repository import ReservaRepository
 
@@ -389,6 +394,54 @@ class ReservaService:
 
         return RegistrarViajerosResponse(
             mensaje="Viajeros registrados en la reserva exitosamente",
+            data=data,
+            success=True,
+        )
+
+    # ── HU-043: Cancelar reserva ────────────────────────────────────
+    def cancelar_reserva(self, id_reserva: int, datos: CancelarReservaCreate) -> CancelarReservaResponse:
+        motivo = (datos.motivo_cancelacion or "").strip()
+
+        # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
+        if not motivo or len(motivo) < 5 or datos.id_usuario <= 0:
+            raise MotivoCancelacionInvalidoException(
+                "Debe proporcionar un motivo válido para cancelar la reserva"
+            )
+
+        # ── REGLA DE NEGOCIO RN-43 (409 Conflict) ──────────────────────
+        # 1. Verificar que la reserva exista
+        reserva = self.repo.obtener_reserva_por_id(id_reserva)
+        if not reserva:
+            raise ReglaNegocioRN43Exception(
+                "La reserva ya se encuentra cancelada o en un estado final que no permite anulación"
+            )
+
+        # 2. Verificar en AIN-05 que el estado actual de la reserva admita cancelación
+        estado_actual = reserva.get("estado", "")
+        if not self.repo.verificar_estado_admite_cancelacion_ain05(estado_actual):
+            raise ReglaNegocioRN43Exception(
+                "La reserva ya se encuentra cancelada o en un estado final que no permite anulación"
+            )
+
+        # ── ACTUALIZACIÓN A CANCELADA Y NOTIFICACIÓN AIN-16 (200 OK) ────
+        resultado = self.repo.cancelar_reserva(id_reserva=id_reserva, motivo=motivo)
+        self.repo.notificar_cancelacion_ain16(
+            id_reserva=id_reserva,
+            codigo_reserva=resultado["codigo_reserva"],
+            id_usuario=datos.id_usuario,
+        )
+
+        data = CancelarReservaData(
+            id_reserva=resultado["id_reserva"],
+            codigo_reserva=resultado["codigo_reserva"],
+            estado_anterior=resultado["estado_anterior"],
+            estado_actual=resultado["estado_actual"],
+            aplica_reembolso=resultado["aplica_reembolso"],
+            fecha_cancelacion=resultado["fecha_cancelacion"],
+        )
+
+        return CancelarReservaResponse(
+            mensaje="Reserva cancelada exitosamente",
             data=data,
             success=True,
         )

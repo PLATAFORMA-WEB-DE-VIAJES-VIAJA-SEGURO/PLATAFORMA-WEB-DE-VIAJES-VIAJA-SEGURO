@@ -32,6 +32,11 @@ from app.domain.reserva import (
     ReglaNegocioRN40Exception,
     DatosViajerosInvalidosException,
     ServiciosViajerosNoDisponiblesException,
+    CancelarReservaCreate,
+    CancelarReservaResponse,
+    ReglaNegocioRN43Exception,
+    MotivoCancelacionInvalidoException,
+    ServiciosCancelacionNoDisponiblesException,
 )
 from app.services.reserva_service import ReservaService
 from app.repositories.reserva_repository import reserva_repository
@@ -416,6 +421,66 @@ RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS = {
     },
 }
 
+# Documentación OpenAPI para HU-043 (Cancelar reserva)
+RESPUESTAS_OPENAPI_CANCELAR_RESERVA = {
+    200: {
+        "description": "Reserva cancelada exitosamente",
+        "model": CancelarReservaResponse,
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Reserva cancelada exitosamente",
+                    "data": {
+                        "id_reserva": 9001,
+                        "codigo_reserva": "VS-2026-8841",
+                        "estado_anterior": "CONFIRMADA",
+                        "estado_actual": "CANCELADA",
+                        "aplica_reembolso": True,
+                        "fecha_cancelacion": "2026-11-16T10:00:00Z",
+                    },
+                    "success": True,
+                }
+            }
+        },
+    },
+    400: {
+        "description": "Debe proporcionar un motivo válido para cancelar la reserva",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Debe proporcionar un motivo válido para cancelar la reserva",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "Error por Regla de Negocio RN-43 (La reserva ya se encuentra cancelada o en estado final)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "La reserva ya se encuentra cancelada o en un estado final que no permite anulación",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de Disponibilidad (No fue posible procesar la cancelación en este momento)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible procesar la cancelación en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
 
 @router.post(
     "/carrito/items",
@@ -484,8 +549,6 @@ def consultar_carrito(
 ):
     load_dotenv(override=True)
     simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-
-    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
     es_simulacion_falla = id_usuario == 503
 
     if simular_falla_env or es_simulacion_falla:
@@ -501,37 +564,21 @@ def consultar_carrito(
     try:
         return servicio.consultar_carrito(id_usuario=id_usuario)
     except ReglaNegocioRN35Exception as e:
-        # Caso 2: Error por Regla de Negocio RN-35 -> 409 Conflict
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except UsuarioCarritoInvalidoException as e:
-        # Caso 3: Error de Validación o Parámetros -> 400 Bad Request
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except ServiciosConsultaCarritoNoDisponiblesException as e:
-        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(e), "data": None, "success": False},
         )
     except Exception:
-        # Fallos imprevistos ocultando trazas técnicas -> 503
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -745,6 +792,78 @@ def registrar_viajeros(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "No fue posible asociar los viajeros a la reserva",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+@router.post(
+    "/{id_reserva}/cancelacion",
+    response_model=CancelarReservaResponse,
+    status_code=status.HTTP_200_OK,
+    responses=RESPUESTAS_OPENAPI_CANCELAR_RESERVA,
+    summary="Cancelar reserva (HU-043)",
+    description="Ejecuta la cancelación controlada de la reserva validando que su estado admita anulación en AIN-05 bajo RN-43 y notificando vía AIN-16.",
+)
+def cancelar_reserva(
+    payload: CancelarReservaCreate,
+    id_reserva: int = Path(..., gt=0, description="Identificador único de la reserva a cancelar (ej: 9001)"),
+):
+    load_dotenv(override=True)
+    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+
+    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
+    es_simulacion_falla = id_reserva == 503 or payload.id_usuario == 503
+
+    if simular_falla_env or es_simulacion_falla:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible procesar la cancelación en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+    try:
+        return servicio.cancelar_reserva(id_reserva=id_reserva, datos=payload)
+    except ReglaNegocioRN43Exception as e:
+        # Caso 2: Error por Regla de Negocio RN-43 -> 409 Conflict
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except MotivoCancelacionInvalidoException as e:
+        # Caso 3: Error de Validación -> 400 Bad Request
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except ServiciosCancelacionNoDisponiblesException as e:
+        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": str(e),
+                "data": None,
+                "success": False,
+            },
+        )
+    except Exception:
+        # Fallos imprevistos ocultando trazas técnicas -> 503
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "No fue posible procesar la cancelación en este momento",
                 "data": None,
                 "success": False,
             },

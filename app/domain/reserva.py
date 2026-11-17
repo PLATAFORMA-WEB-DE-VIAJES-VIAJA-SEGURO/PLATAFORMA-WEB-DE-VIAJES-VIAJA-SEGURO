@@ -134,6 +134,28 @@ class ServiciosViajerosNoDisponiblesException(Exception):
         super().__init__(self.mensaje)
 
 
+# ── EXCEPCIONES HU-043 (Cancelar reserva) ───────────────────────
+class ReglaNegocioRN43Exception(Exception):
+    """Excepción cuando la reserva ya está cancelada o en un estado final que no permite anulación (RN-43)."""
+    def __init__(self, mensaje: str = "La reserva ya se encuentra cancelada o en un estado final que no permite anulación"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class MotivoCancelacionInvalidoException(Exception):
+    """Excepción cuando no se proporciona un motivo válido para cancelar la reserva (400)."""
+    def __init__(self, mensaje: str = "Debe proporcionar un motivo válido para cancelar la reserva"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
+class ServiciosCancelacionNoDisponiblesException(Exception):
+    """Excepción cuando falla la comunicación con AIN-05 o AIN-16 al cancelar la reserva (503)."""
+    def __init__(self, mensaje: str = "No fue posible procesar la cancelación en este momento"):
+        self.mensaje = mensaje
+        super().__init__(self.mensaje)
+
+
 # ── MODELOS HU-033 (Agregar ítem al carrito) ────────────────────
 class ItemCarritoCreate(BaseModel):
     id_usuario: int = Field(..., gt=0, description="Identificador del viajero titular del carrito")
@@ -290,4 +312,25 @@ class RegistrarViajerosData(BaseModel):
 class RegistrarViajerosResponse(BaseModel):
     mensaje: str
     data: Optional[RegistrarViajerosData] = None
+    success: bool
+
+
+# ── MODELOS HU-043 (Cancelar reserva) ───────────────────────────
+class CancelarReservaCreate(BaseModel):
+    id_usuario: int = Field(..., gt=0, description="Identificador del viajero que solicita la cancelación")
+    motivo_cancelacion: str = Field(..., description="Motivo de cancelación de la reserva")
+
+
+class CancelarReservaData(BaseModel):
+    id_reserva: int = Field(..., description="Identificador único de la reserva")
+    codigo_reserva: str = Field(..., description="Código localizador de la reserva (ej: VS-2026-8841)")
+    estado_anterior: str = Field(..., description="Estado de la reserva antes de cancelar (ej: CONFIRMADA)")
+    estado_actual: str = Field(..., description="Nuevo estado de la reserva (CANCELADA)")
+    aplica_reembolso: bool = Field(..., description="Indica si la cancelación aplica para reembolso")
+    fecha_cancelacion: str = Field(..., description="Fecha y hora de cancelación en formato ISO 8601")
+
+
+class CancelarReservaResponse(BaseModel):
+    mensaje: str
+    data: Optional[CancelarReservaData] = None
     success: bool
