@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional
 from dotenv import load_dotenv
-from app.domain.paquete import Destino
+from app.domain.paquete import Destino, Actividad
 
 
 def _verificar_disponibilidad_paquetes(valor_control: str = "") -> None:
@@ -14,6 +14,7 @@ def _verificar_disponibilidad_paquetes(valor_control: str = "") -> None:
 class PaqueteRepository:
     def __init__(self):
         self._destinos: List[Destino] = []
+        self._actividades: List[Actividad] = []
         self._seed()
 
     def _seed(self):
@@ -64,6 +65,57 @@ class PaqueteRepository:
             ),
         ]
 
+        self._actividades = [
+            Actividad(
+                id_actividad="ACT-401",
+                id_destino="DST-301",
+                nombre="Pasadía Islas del Rosario y Playa Blanca",
+                categoria="ACUATICA",
+                duracion_horas=8,
+                punto_encuentro="Muelle de la Bodeguita - Puerta 4",
+                incluye_guia=True,
+                cupos_diarios=20,
+                precio_persona=260000.0,
+                moneda="COP",
+            ),
+            Actividad(
+                id_actividad="ACT-402",
+                id_destino="DST-301",
+                nombre="Caminata Histórica Ciudad Amurallada y Castillo San Felipe",
+                categoria="CULTURAL",
+                duracion_horas=4,
+                punto_encuentro="Torre del Reloj",
+                incluye_guia=True,
+                cupos_diarios=15,
+                precio_persona=140000.0,
+                moneda="COP",
+            ),
+            Actividad(
+                id_actividad="ACT-403",
+                id_destino="DST-302",
+                nombre="Excursión Piedra del Peñol y Guatapé",
+                categoria="TOUR_GUIADO",
+                duracion_horas=10,
+                punto_encuentro="Estación Poblado",
+                incluye_guia=True,
+                cupos_diarios=12,
+                precio_persona=195000.0,
+                moneda="COP",
+            ),
+            Actividad(
+                id_actividad="ACT-404",
+                id_destino="DST-303",
+                nombre="Recorrido Museo del Oro y Monserrate",
+                categoria="CULTURAL",
+                duracion_horas=5,
+                punto_encuentro="Parque Santander",
+                incluye_guia=True,
+                cupos_diarios=2,
+                precio_persona=130000.0,
+                moneda="COP",
+            ),
+        ]
+
     # HU-023: Consultar destinos disponibles con filtros opcionales
     def consultar_destinos(
         self,
@@ -81,11 +133,34 @@ class PaqueteRepository:
             and (tipo_paquete is None or d.tipo_paquete == tipo_paquete)
         ]
 
-    # Base para HU-026 y HU-027
+    # HU-026: Obtener destino por ID
     def obtener_destino_por_id(self, id_destino: str) -> Optional[Destino]:
         _verificar_disponibilidad_paquetes(id_destino)
         return next(
             (d for d in self._destinos if d.id_destino == id_destino.strip().upper() and d.activo),
+            None,
+        )
+
+    # HU-026: Consultar actividades asociadas a un destino en AEX-03
+    def consultar_actividades_destino(
+        self,
+        id_destino: str,
+        categoria: Optional[str] = None,
+    ) -> List[Actividad]:
+        _verificar_disponibilidad_paquetes(id_destino)
+        return [
+            a for a in self._actividades
+            if a.activa
+            and a.id_destino == id_destino.strip().upper()
+            and a.cupos_diarios > 0
+            and (categoria is None or a.categoria == categoria)
+        ]
+
+    # HU-027: Obtener actividad por ID en AEX-03
+    def obtener_actividad_por_id(self, id_actividad: str) -> Optional[Actividad]:
+        _verificar_disponibilidad_paquetes(id_actividad)
+        return next(
+            (a for a in self._actividades if a.id_actividad == id_actividad.strip().upper() and a.activa),
             None,
         )
 
