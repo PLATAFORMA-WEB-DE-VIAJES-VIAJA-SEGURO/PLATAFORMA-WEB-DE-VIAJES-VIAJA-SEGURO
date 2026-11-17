@@ -5,6 +5,7 @@ from pydantic import BaseModel
 PAISES_PAQUETE_VALIDOS = {"CO", "US", "ES", "MX", "PA"}
 MUNICIPIOS_PAQUETE_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
 TIPOS_PAQUETE_VALIDOS = {"TODO_INCLUIDO", "AVENTURA", "CULTURAL", "PLAYA", "FAMILIAR"}
+CATEGORIAS_ACTIVIDAD_VALIDAS = {"TOUR_GUIADO", "AVENTURA", "GASTRONOMIA", "ACUATICA", "CULTURAL"}
 MONEDAS_PAQUETE_AIN04 = {"COP", "USD"}
 
 
@@ -24,6 +25,26 @@ class DestinoItemOut(BaseModel):
 class ConsultaDestinosOut(BaseModel):
     mensaje: str
     data: Optional[List[DestinoItemOut]] = None
+    success: bool
+
+
+# HU-026: Esquemas de consulta de actividades del destino
+class ActividadItemOut(BaseModel):
+    id_actividad: str
+    id_destino: str
+    nombre: str
+    categoria: str
+    duracion_horas: int
+    punto_encuentro: str
+    incluye_guia: bool
+    cupos_diarios: int
+    precio_persona: float
+    moneda: str
+
+
+class ConsultaActividadesOut(BaseModel):
+    mensaje: str
+    data: Optional[List[ActividadItemOut]] = None
     success: bool
 
 
@@ -64,5 +85,49 @@ class Destino:
             "descripcion": self.descripcion,
             "temporada_recomendada": self.temporada_recomendada,
             "precio_desde": self.precio_desde,
+            "moneda": self.moneda,
+        }
+
+
+# Entidad de dominio: Actividad Turística (AEX-03)
+class Actividad:
+    def __init__(
+        self,
+        id_actividad: str,
+        id_destino: str,
+        nombre: str,
+        categoria: str,
+        duracion_horas: int,
+        punto_encuentro: str,
+        incluye_guia: bool,
+        cupos_diarios: int,
+        precio_persona: float,
+        moneda: str = "COP",
+        activa: bool = True,
+    ):
+        self.id_actividad = id_actividad
+        self.id_destino = id_destino
+        self.nombre = nombre
+        self.categoria = categoria
+        self.duracion_horas = duracion_horas
+        self.punto_encuentro = punto_encuentro
+        self.incluye_guia = incluye_guia
+        self.cupos_diarios = cupos_diarios
+        self.precio_persona = precio_persona
+        self.moneda = moneda
+        self.activa = activa
+
+    # HU-026: Serialización de la actividad
+    def to_response(self) -> dict:
+        return {
+            "id_actividad": self.id_actividad,
+            "id_destino": self.id_destino,
+            "nombre": self.nombre,
+            "categoria": self.categoria,
+            "duracion_horas": self.duracion_horas,
+            "punto_encuentro": self.punto_encuentro,
+            "incluye_guia": self.incluye_guia,
+            "cupos_diarios": self.cupos_diarios,
+            "precio_persona": self.precio_persona,
             "moneda": self.moneda,
         }
