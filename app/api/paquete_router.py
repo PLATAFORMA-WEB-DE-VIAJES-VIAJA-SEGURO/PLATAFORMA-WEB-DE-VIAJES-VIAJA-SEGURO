@@ -1,7 +1,11 @@
+from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse
-from app.domain.paquete import ConsultaDestinosOut
+from app.domain.paquete import (
+    ConsultaDestinosOut,
+    ConsultaActividadesOut,
+)
 from app.services.paquete_service import (
     PaqueteService,
     ErrorParametrosPaquete,
@@ -51,6 +55,48 @@ def consultar_destinos(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "El servicio de catálogo de destinos no está disponible en este momento",
+                "data": None,
+                "success": False,
+            },
+        )
+
+
+# HU-026: Consultar actividades del destino
+@router.get(
+    "/actividades",
+    response_model=ConsultaActividadesOut,
+    status_code=status.HTTP_200_OK,
+    summary="Consultar actividades del destino",
+    description="Consulta los tours y atracciones disponibles en operadores locales (AEX-03) para un destino y rango de fechas (RN-26).",
+)
+def consultar_actividades_destino(
+    id_destino: str = Query(..., min_length=3, max_length=20, description="Identificador del destino (ej. DST-301)"),
+    fecha_inicio: date = Query(..., description="Fecha inicial de viaje (YYYY-MM-DD)"),
+    fecha_fin: Optional[date] = Query(default=None, description="Fecha final opcional (YYYY-MM-DD)"),
+    categoria: Optional[str] = Query(default=None, description="Categoría opcional: TOUR_GUIADO, AVENTURA, GASTRONOMIA, ACUATICA, CULTURAL"),
+):
+    try:
+        return service.consultar_actividades_destino(
+            id_destino=id_destino,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            categoria=categoria,
+        )
+    except ErrorParametrosPaquete as e:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except ErrorReglaNegocioPaquete as e:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"mensaje": str(e), "data": None, "success": False},
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "mensaje": "El servicio de operadores locales (AEX-03) no está disponible en este momento",
                 "data": None,
                 "success": False,
             },
