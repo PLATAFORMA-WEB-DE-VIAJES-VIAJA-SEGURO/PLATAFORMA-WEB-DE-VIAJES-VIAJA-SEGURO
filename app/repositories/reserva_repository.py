@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 
-class ReservaRepository:
+class ReservationRepository:
     """
     Repositorio que coordina la integración con AIN-01 (Catálogo Documentos),
     AIN-05 (Catálogos Reserva, Estado y Moneda), AIN-08 (Identidad),
@@ -12,7 +12,7 @@ class ReservaRepository:
 
     def __init__(self):
         # Ítems precargados para la consulta del carrito (HU-035)
-        self._items_default_701 = [
+        self._default_items_701 = [
             {
                 "id_item": 1,
                 "tipo_servicio": "VUELO",
@@ -30,7 +30,7 @@ class ReservaRepository:
         ]
 
         # Catálogo de carritos en memoria para pruebas funcionales en Swagger UI
-        self._carritos: Dict[int, Dict[str, Any]] = {
+        self._carts: Dict[int, Dict[str, Any]] = {
             701: {
                 "id_carrito": 701,
                 "id_usuario": 1,
@@ -44,7 +44,7 @@ class ReservaRepository:
                 "total_liquidado": 3000000.0,
                 "moneda": "COP",
                 "items": [],
-                "items_consulta": list(self._items_default_701),
+                "items_consulta": list(self._default_items_701),
             },
             702: {
                 "id_carrito": 702,
@@ -59,7 +59,7 @@ class ReservaRepository:
                 "total_liquidado": 1500000.0,
                 "moneda": "COP",
                 "items": [],
-                "items_consulta": list(self._items_default_701),
+                "items_consulta": list(self._default_items_701),
             },
             703: {
                 "id_carrito": 703,
@@ -74,7 +74,7 @@ class ReservaRepository:
                 "total_liquidado": 4200000.0,
                 "moneda": "COP",
                 "items": [],
-                "items_consulta": list(self._items_default_701),
+                "items_consulta": list(self._default_items_701),
             },
             700: {
                 "id_carrito": 700,
@@ -94,7 +94,7 @@ class ReservaRepository:
         }
 
         # Relación usuario -> carrito activo
-        self._carrito_por_usuario: Dict[int, int] = {
+        self._cart_by_user: Dict[int, int] = {
             1: 701,
             2: 702,
             3: 703,
@@ -103,9 +103,9 @@ class ReservaRepository:
         }
 
         # Control de ítems agregados al carrito para HU-033 (RN-33)
-        self._siguiente_id_item = 1
-        self._bloqueos_en_carrito: set = set()
-        self._bloqueos_expirados: set = {
+        self._next_item_id = 1
+        self._locks_in_cart: set = set()
+        self._expired_locks: set = {
             "BLK-EXPIRADO",
             "BLK-V-0000",
             "BLK-H-0000",
@@ -114,27 +114,27 @@ class ReservaRepository:
         }
 
         # Catálogo de precisión decimal por moneda en AIN-05
-        self._precision_moneda_ain05: Dict[str, int] = {
+        self._currency_precision_ain05: Dict[str, int] = {
             "COP": 1,
             "USD": 2,
             "EUR": 2,
         }
 
         # Estados de reserva que admiten cancelación según AIN-05 (RN-43)
-        self._estados_cancelables_ain05 = {"CONFIRMADA", "PENDIENTE_PAGO"}
+        self._cancellable_states_ain05 = {"CONFIRMADA", "PENDIENTE_PAGO"}
 
         # Usuarios con identidad verificada en AIN-08
-        self._usuarios_verificados = {1, 2, 3, 4, 5}
+        self._verified_users = {1, 2, 3, 4, 5}
 
         # Almacenamiento de reservas creadas (HU-039)
-        self._reservas_creadas: List[Dict[str, Any]] = []
+        self._created_reservations: List[Dict[str, Any]] = []
         # Carritos que ya tienen reserva generada (700 precargado para pruebas de RN-39)
-        self._carritos_con_reserva: set = {700}
+        self._carts_with_reservation: set = {700}
         # Secuencia de IDs de reserva según especificación HU-039 (inicia en 9001)
-        self._siguiente_id_reserva = 9001
+        self._next_reservation_id = 9001
 
         # Reservas base precargadas para pruebas directas de HU-040 y HU-043 en Swagger UI
-        self._reservas_base: Dict[int, Dict[str, Any]] = {
+        self._base_reservations: Dict[int, Dict[str, Any]] = {
             9001: {
                 "id_reserva": 9001,
                 "codigo_reserva": "VS-2026-8841",
@@ -182,199 +182,199 @@ class ReservaRepository:
         }
 
         # Tipos de documento válidos en AIN-01
-        self._tipos_documento_ain01 = {"CC", "CE", "TI", "PA", "PASAPORTE", "RC", "NIT"}
+        self._valid_document_types_ain01 = {"CC", "CE", "TI", "PA", "PASAPORTE", "RC", "NIT"}
 
     # ── Métodos HU-033 (Agregar ítem al carrito) ────────────────────
-    def verificar_bloqueo_servicio_vigente(self, id_referencia_bloqueo: str) -> bool:
+    def is_service_lock_valid(self, lock_reference_id: str) -> bool:
         """AIN-09 / AIN-10 / AIN-13: Verifica si el bloqueo temporal del servicio está vigente."""
-        ref = id_referencia_bloqueo.strip().upper()
-        return ref not in self._bloqueos_expirados
+        normalized_ref = lock_reference_id.strip().upper()
+        return normalized_ref not in self._expired_locks
 
-    def verificar_bloqueo_duplicado_en_carrito(self, id_referencia_bloqueo: str) -> bool:
+    def is_lock_duplicated_in_cart(self, lock_reference_id: str) -> bool:
         """RN-33: Verifica si el mismo bloqueo ya fue agregado previamente al carrito."""
-        ref = id_referencia_bloqueo.strip().upper()
-        return ref in self._bloqueos_en_carrito
+        normalized_ref = lock_reference_id.strip().upper()
+        return normalized_ref in self._locks_in_cart
 
-    def agregar_item_al_carrito(
+    def add_item_to_cart(
         self,
-        id_usuario: int,
-        tipo_servicio: str,
-        id_referencia_bloqueo: str,
-        descripcion: str,
-        cantidad: int,
-        precio_unitario: float,
+        user_id: int,
+        service_type: str,
+        lock_reference_id: str,
+        description: str,
+        quantity: int,
+        unit_price: float,
     ) -> Dict[str, Any]:
         """Agrega un nuevo ítem validado al carrito activo del usuario."""
-        id_carrito = self._carrito_por_usuario.get(id_usuario, 701)
-        carrito = self._carritos.get(id_carrito, self._carritos[701])
+        cart_id = self._cart_by_user.get(user_id, 701)
+        cart = self._carts.get(cart_id, self._carts[701])
 
-        id_item = self._siguiente_id_item
-        subtotal = round(float(cantidad) * float(precio_unitario), 1)
-        ref = id_referencia_bloqueo.strip().upper()
+        item_id = self._next_item_id
+        subtotal = round(float(quantity) * float(unit_price), 1)
+        normalized_ref = lock_reference_id.strip().upper()
 
-        nuevo_item = {
-            "id_carrito": carrito["id_carrito"],
-            "id_item": id_item,
-            "tipo_servicio": tipo_servicio,
-            "id_referencia_bloqueo": ref,
-            "descripcion": descripcion,
-            "cantidad": cantidad,
-            "precio_unitario": float(precio_unitario),
+        new_item = {
+            "id_carrito": cart["id_carrito"],
+            "id_item": item_id,
+            "tipo_servicio": service_type,
+            "id_referencia_bloqueo": normalized_ref,
+            "descripcion": description,
+            "cantidad": quantity,
+            "precio_unitario": float(unit_price),
             "subtotal": subtotal,
         }
 
-        carrito.setdefault("items", []).append(nuevo_item)
-        self._bloqueos_en_carrito.add(ref)
-        self._siguiente_id_item += 1
+        cart.setdefault("items", []).append(new_item)
+        self._locks_in_cart.add(normalized_ref)
+        self._next_item_id += 1
 
-        nuevo_item["total_items_carrito"] = len(carrito["items"])
-        return nuevo_item
+        new_item["total_items_carrito"] = len(cart["items"])
+        return new_item
 
     # ── Métodos HU-035 y HU-037 (Consultar y Calcular carrito) ──────
-    def obtener_carrito_por_usuario(self, id_usuario: int) -> Optional[Dict[str, Any]]:
+    def get_cart_by_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         """HU-035 / HU-037: Obtiene el carrito asociado al usuario indicado."""
-        id_carrito = self._carrito_por_usuario.get(id_usuario)
-        if id_carrito is None:
+        cart_id = self._cart_by_user.get(user_id)
+        if cart_id is None:
             return None
-        return self._carritos.get(id_carrito)
+        return self._carts.get(cart_id)
 
-    def obtener_precision_moneda_ain05(self, moneda: str) -> int:
+    def get_currency_precision_ain05(self, currency: str) -> int:
         """AIN-05: Retorna la cantidad de decimales de redondeo según la moneda."""
-        return self._precision_moneda_ain05.get(moneda.upper(), 2)
+        return self._currency_precision_ain05.get(currency.upper(), 2)
 
     # ── Métodos HU-038, HU-039 y HU-040 ─────────────────────────────
-    def verificar_identidad_ain08(self, id_usuario: int) -> bool:
+    def verify_identity_ain08(self, user_id: int) -> bool:
         """AIN-08: Revalida que la identidad del usuario esté activa y verificada."""
-        return id_usuario in self._usuarios_verificados
+        return user_id in self._verified_users
 
-    def obtener_carrito(self, id_carrito: int) -> Optional[Dict[str, Any]]:
+    def get_cart(self, cart_id: int) -> Optional[Dict[str, Any]]:
         """Obtiene la información actual del carrito de compras."""
-        return self._carritos.get(id_carrito)
+        return self._carts.get(cart_id)
 
-    def verificar_bloqueos_ain09_ain10(self, carrito: Dict[str, Any]) -> bool:
+    def verify_locks_ain09_ain10(self, cart: Dict[str, Any]) -> bool:
         """AIN-09 y AIN-10: Verifica que los bloqueos temporales de vuelos y hoteles sigan vigentes."""
-        return bool(carrito.get("bloqueos_vigentes", False))
+        return bool(cart.get("bloqueos_vigentes", False))
 
-    def cerrar_carrito_y_solicitar_cobro_ain14(
+    def close_cart_and_request_charge_ain14(
         self,
-        id_carrito: int,
-        medio_pago: str,
-        direccion_facturacion: str,
+        cart_id: int,
+        payment_method: str,
+        billing_address: str,
     ) -> Dict[str, Any]:
         """
         Transiciona el carrito de ABIERTO a CERRADO, congela la liquidación
         y dispara la orden de reserva pendiente de pago hacia AIN-14.
         """
-        carrito = self._carritos[id_carrito]
-        carrito["estado_carrito"] = "CERRADO"
-        carrito["medio_pago"] = medio_pago
-        carrito["direccion_facturacion"] = direccion_facturacion
-        return carrito
+        cart = self._carts[cart_id]
+        cart["estado_carrito"] = "CERRADO"
+        cart["medio_pago"] = payment_method
+        cart["direccion_facturacion"] = billing_address
+        return cart
 
-    def verificar_reserva_existente_por_carrito(self, id_carrito: int) -> bool:
+    def has_existing_reservation_for_cart(self, cart_id: int) -> bool:
         """RN-39: Verifica si ya existe una reserva generada para el carrito dado."""
-        return id_carrito in self._carritos_con_reserva
+        return cart_id in self._carts_with_reservation
 
-    def obtener_estado_inicial_ain05(self) -> str:
+    def get_initial_status_ain05(self) -> str:
         """AIN-05: Consulta el estado inicial parametrizado para nuevas reservas."""
         return "PENDIENTE_PAGO"
 
-    def crear_reserva(
+    def create_reservation(
         self,
-        id_usuario: int,
-        id_carrito: int,
-        moneda: str,
-        total_reserva: float,
+        user_id: int,
+        cart_id: int,
+        currency: str,
+        total_reservation: float,
     ) -> Dict[str, Any]:
         """
         Persiste la reserva oficial en MOD-05 generando un código localizador único (VS-YYYY-XXXX).
         """
-        id_reserva = self._siguiente_id_reserva
-        carrito = self._carritos.get(id_carrito, {})
+        reservation_id = self._next_reservation_id
+        cart = self._carts.get(cart_id, {})
 
-        if id_reserva == 9001 or id_carrito == 701:
-            codigo_reserva = carrito.get("codigo_reserva_preliminar", "VS-2026-8841")
-            fecha_creacion = "2026-11-15T17:15:00Z"
+        if reservation_id == 9001 or cart_id == 701:
+            reservation_code = cart.get("codigo_reserva_preliminar", "VS-2026-8841")
+            created_at = "2026-11-15T17:15:00Z"
         else:
-            codigo_reserva = carrito.get("codigo_reserva_preliminar", f"VS-2026-{id_reserva}")
-            fecha_creacion = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            reservation_code = cart.get("codigo_reserva_preliminar", f"VS-2026-{reservation_id}")
+            created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        estado_inicial = self.obtener_estado_inicial_ain05()
+        initial_status = self.get_initial_status_ain05()
 
-        nueva_reserva = {
-            "id_reserva": id_reserva,
-            "codigo_reserva": codigo_reserva,
-            "id_usuario": id_usuario,
-            "id_carrito": id_carrito,
-            "estado": estado_inicial,
-            "total": float(total_reserva),
-            "moneda": moneda,
-            "fecha_creacion": fecha_creacion,
+        new_reservation = {
+            "id_reserva": reservation_id,
+            "codigo_reserva": reservation_code,
+            "id_usuario": user_id,
+            "id_carrito": cart_id,
+            "estado": initial_status,
+            "total": float(total_reservation),
+            "moneda": currency,
+            "fecha_creacion": created_at,
             "cupos_reservados": 2,
             "viajeros": [],
             "estado_nominacion": "PENDIENTE",
         }
 
-        self._reservas_creadas.append(nueva_reserva)
-        self._reservas_base[id_reserva] = nueva_reserva
-        self._carritos_con_reserva.add(id_carrito)
-        self._siguiente_id_reserva += 1
+        self._created_reservations.append(new_reservation)
+        self._base_reservations[reservation_id] = new_reservation
+        self._carts_with_reservation.add(cart_id)
+        self._next_reservation_id += 1
 
-        return nueva_reserva
+        return new_reservation
 
-    def validar_tipo_documento_ain01(self, tipo_documento: str) -> bool:
+    def validate_document_type_ain01(self, document_type: str) -> bool:
         """AIN-01: Verifica que el tipo de documento exista en el catálogo oficial."""
-        return tipo_documento.strip().upper() in self._tipos_documento_ain01
+        return document_type.strip().upper() in self._valid_document_types_ain01
 
-    def obtener_reserva_por_id(self, id_reserva: int) -> Optional[Dict[str, Any]]:
+    def get_reservation_by_id(self, reservation_id: int) -> Optional[Dict[str, Any]]:
         """Busca una reserva por su ID en el catálogo base o en las creadas en sesión."""
-        if id_reserva in self._reservas_base:
-            return self._reservas_base[id_reserva]
-        for r in self._reservas_creadas:
-            if r["id_reserva"] == id_reserva:
-                return r
+        if reservation_id in self._base_reservations:
+            return self._base_reservations[reservation_id]
+        for reservation in self._created_reservations:
+            if reservation["id_reserva"] == reservation_id:
+                return reservation
         return None
 
-    def registrar_viajeros_en_reserva(
+    def register_travelers_in_reservation(
         self,
-        id_reserva: int,
-        viajeros: List[Dict[str, Any]],
+        reservation_id: int,
+        travelers: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """Persiste el listado de viajeros nominados en la reserva y actualiza su estado a COMPLETA."""
-        reserva = self.obtener_reserva_por_id(id_reserva)
-        reserva["viajeros"] = viajeros
-        reserva["estado_nominacion"] = "COMPLETA"
-        return reserva
+        reservation = self.get_reservation_by_id(reservation_id)
+        reservation["viajeros"] = travelers
+        reservation["estado_nominacion"] = "COMPLETA"
+        return reservation
 
     # ── Métodos HU-043 (Cancelar reserva) ───────────────────────────
-    def verificar_estado_admite_cancelacion_ain05(self, estado_actual: str) -> bool:
+    def can_cancel_status_ain05(self, current_status: str) -> bool:
         """AIN-05: Verifica si el estado actual de la reserva permite su anulación (RN-43)."""
-        return estado_actual.strip().upper() in self._estados_cancelables_ain05
+        return current_status.strip().upper() in self._cancellable_states_ain05
 
-    def cancelar_reserva(self, id_reserva: int, motivo: str) -> Dict[str, Any]:
+    def cancel_reservation(self, reservation_id: int, reason: str) -> Dict[str, Any]:
         """Actualiza el estado de la reserva a CANCELADA y registra la trazabilidad."""
-        reserva = self.obtener_reserva_por_id(id_reserva)
-        estado_anterior = reserva.get("estado", "CONFIRMADA")
+        reservation = self.get_reservation_by_id(reservation_id)
+        previous_status = reservation.get("estado", "CONFIRMADA")
         # Para coincidir con el ejemplo oficial de la HU-043 cuando es PENDIENTE_PAGO o CONFIRMADA
-        if id_reserva == 9001 and estado_anterior == "PENDIENTE_PAGO":
-            estado_anterior = "CONFIRMADA"
+        if reservation_id == 9001 and previous_status == "PENDIENTE_PAGO":
+            previous_status = "CONFIRMADA"
 
-        reserva["estado"] = "CANCELADA"
-        reserva["motivo_cancelacion"] = motivo
+        reservation["estado"] = "CANCELADA"
+        reservation["motivo_cancelacion"] = reason
 
         return {
-            "id_reserva": reserva["id_reserva"],
-            "codigo_reserva": reserva["codigo_reserva"],
-            "estado_anterior": estado_anterior,
+            "id_reserva": reservation["id_reserva"],
+            "codigo_reserva": reservation["codigo_reserva"],
+            "estado_anterior": previous_status,
             "estado_actual": "CANCELADA",
             "aplica_reembolso": True,
             "fecha_cancelacion": "2026-11-16T10:00:00Z",
         }
 
-    def notificar_cancelacion_ain16(self, id_reserva: int, codigo_reserva: str, id_usuario: int):
+    def notify_cancellation_ain16(self, reservation_id: int, reservation_code: str, user_id: int):
         """AIN-16: Dispara la notificación de cancelación de reserva al viajero."""
         pass
 
 
 # Instancia singleton del repositorio
-reserva_repository = ReservaRepository()
+reservation_repository = ReservationRepository()

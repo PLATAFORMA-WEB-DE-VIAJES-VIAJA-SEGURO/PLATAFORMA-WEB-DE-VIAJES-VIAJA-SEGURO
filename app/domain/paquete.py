@@ -3,15 +3,15 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 # Catálogos transversales (MOD-04 / AIN-04: PAR-02, PAR-03, PAR-10, PAR-07)
-PAISES_PAQUETE_VALIDOS = {"CO", "US", "ES", "MX", "PA"}
-MUNICIPIOS_PAQUETE_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
-TIPOS_PAQUETE_VALIDOS = {"TODO_INCLUIDO", "AVENTURA", "CULTURAL", "PLAYA", "FAMILIAR"}
-CATEGORIAS_ACTIVIDAD_VALIDAS = {"TOUR_GUIADO", "AVENTURA", "GASTRONOMIA", "ACUATICA", "CULTURAL"}
-MONEDAS_PAQUETE_AIN04 = {"COP", "USD"}
+VALID_PACKAGE_COUNTRIES = {"CO", "US", "ES", "MX", "PA"}
+VALID_PACKAGE_MUNICIPALITIES = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
+VALID_PACKAGE_TYPES = {"TODO_INCLUIDO", "AVENTURA", "CULTURAL", "PLAYA", "FAMILIAR"}
+VALID_ACTIVITY_CATEGORIES = {"TOUR_GUIADO", "AVENTURA", "GASTRONOMIA", "ACUATICA", "CULTURAL"}
+VALID_PACKAGE_CURRENCIES_AIN04 = {"COP", "USD"}
 
 
 # HU-023: Esquemas de consulta de destinos
-class DestinoItemOut(BaseModel):
+class DestinationItemOut(BaseModel):
     id_destino: str
     nombre: str
     pais: str
@@ -23,14 +23,14 @@ class DestinoItemOut(BaseModel):
     moneda: str
 
 
-class ConsultaDestinosOut(BaseModel):
+class DestinationsQueryOut(BaseModel):
     mensaje: str
-    data: Optional[List[DestinoItemOut]] = None
+    data: Optional[List[DestinationItemOut]] = None
     success: bool
 
 
 # HU-026: Esquemas de consulta de actividades del destino
-class ActividadItemOut(BaseModel):
+class ActivityItemOut(BaseModel):
     id_actividad: str
     id_destino: str
     nombre: str
@@ -43,14 +43,14 @@ class ActividadItemOut(BaseModel):
     moneda: str
 
 
-class ConsultaActividadesOut(BaseModel):
+class ActivitiesQueryOut(BaseModel):
     mensaje: str
-    data: Optional[List[ActividadItemOut]] = None
+    data: Optional[List[ActivityItemOut]] = None
     success: bool
 
 
 # HU-027: Esquemas de verificación de cupo y tarifa de actividad
-class DisponibilidadActividadDataOut(BaseModel):
+class ActivityAvailabilityDataOut(BaseModel):
     id_actividad: str
     nombre_actividad: str
     id_destino: str
@@ -64,110 +64,110 @@ class DisponibilidadActividadDataOut(BaseModel):
     disponible: bool
 
 
-class DisponibilidadActividadOut(BaseModel):
+class ActivityAvailabilityOut(BaseModel):
     mensaje: str
-    data: Optional[DisponibilidadActividadDataOut] = None
+    data: Optional[ActivityAvailabilityDataOut] = None
     success: bool
 
 
 # Entidad de dominio: Destino
-class Destino:
+class Destination:
     def __init__(
         self,
-        id_destino: str,
-        nombre: str,
-        pais: str,
-        municipio: str,
-        tipo_paquete: str,
-        descripcion: str,
-        temporada_recomendada: str,
-        precio_desde: float,
-        moneda: str = "COP",
-        activo: bool = True,
+        destination_id: str,
+        name: str,
+        country: str,
+        municipality: str,
+        package_type: str,
+        description: str,
+        recommended_season: str,
+        price_from: float,
+        currency: str = "COP",
+        active: bool = True,
     ):
-        self.id_destino = id_destino
-        self.nombre = nombre
-        self.pais = pais
-        self.municipio = municipio
-        self.tipo_paquete = tipo_paquete
-        self.descripcion = descripcion
-        self.temporada_recomendada = temporada_recomendada
-        self.precio_desde = precio_desde
-        self.moneda = moneda
-        self.activo = activo
+        self.destination_id = destination_id
+        self.name = name
+        self.country = country
+        self.municipality = municipality
+        self.package_type = package_type
+        self.description = description
+        self.recommended_season = recommended_season
+        self.price_from = price_from
+        self.currency = currency
+        self.active = active
 
     # HU-023: Serialización del destino
     def to_response(self) -> dict:
         return {
-            "id_destino": self.id_destino,
-            "nombre": self.nombre,
-            "pais": self.pais,
-            "municipio": self.municipio,
-            "tipo_paquete": self.tipo_paquete,
-            "descripcion": self.descripcion,
-            "temporada_recomendada": self.temporada_recomendada,
-            "precio_desde": self.precio_desde,
-            "moneda": self.moneda,
+            "id_destino": self.destination_id,
+            "nombre": self.name,
+            "pais": self.country,
+            "municipio": self.municipality,
+            "tipo_paquete": self.package_type,
+            "descripcion": self.description,
+            "temporada_recomendada": self.recommended_season,
+            "precio_desde": self.price_from,
+            "moneda": self.currency,
         }
 
 
 # Entidad de dominio: Actividad Turística (AEX-03)
-class Actividad:
+class Activity:
     def __init__(
         self,
-        id_actividad: str,
-        id_destino: str,
-        nombre: str,
-        categoria: str,
-        duracion_horas: int,
-        punto_encuentro: str,
-        incluye_guia: bool,
-        cupos_diarios: int,
-        precio_persona: float,
-        moneda: str = "COP",
-        activa: bool = True,
+        activity_id: str,
+        destination_id: str,
+        name: str,
+        category: str,
+        duration_hours: int,
+        meeting_point: str,
+        includes_guide: bool,
+        daily_quota: int,
+        price_per_person: float,
+        currency: str = "COP",
+        active: bool = True,
     ):
-        self.id_actividad = id_actividad
-        self.id_destino = id_destino
-        self.nombre = nombre
-        self.categoria = categoria
-        self.duracion_horas = duracion_horas
-        self.punto_encuentro = punto_encuentro
-        self.incluye_guia = incluye_guia
-        self.cupos_diarios = cupos_diarios
-        self.precio_persona = precio_persona
-        self.moneda = moneda
-        self.activa = activa
+        self.activity_id = activity_id
+        self.destination_id = destination_id
+        self.name = name
+        self.category = category
+        self.duration_hours = duration_hours
+        self.meeting_point = meeting_point
+        self.includes_guide = includes_guide
+        self.daily_quota = daily_quota
+        self.price_per_person = price_per_person
+        self.currency = currency
+        self.active = active
 
     # HU-026: Serialización de la actividad
     def to_response(self) -> dict:
         return {
-            "id_actividad": self.id_actividad,
-            "id_destino": self.id_destino,
-            "nombre": self.nombre,
-            "categoria": self.categoria,
-            "duracion_horas": self.duracion_horas,
-            "punto_encuentro": self.punto_encuentro,
-            "incluye_guia": self.incluye_guia,
-            "cupos_diarios": self.cupos_diarios,
-            "precio_persona": self.precio_persona,
-            "moneda": self.moneda,
+            "id_actividad": self.activity_id,
+            "id_destino": self.destination_id,
+            "nombre": self.name,
+            "categoria": self.category,
+            "duracion_horas": self.duration_hours,
+            "punto_encuentro": self.meeting_point,
+            "incluye_guia": self.includes_guide,
+            "cupos_diarios": self.daily_quota,
+            "precio_persona": self.price_per_person,
+            "moneda": self.currency,
         }
 
     # HU-027: Cálculo de tarifa consolidada y verificación de aforo
-    def calcular_disponibilidad_tarifa(self, fecha_actividad: date, cantidad_personas: int) -> dict:
-        subtotal = round(self.precio_persona * cantidad_personas, 2)
-        impuestos = round(subtotal * 0.19, 2)
+    def calculate_availability_and_fare(self, activity_date: date, people_count: int) -> dict:
+        subtotal = round(self.price_per_person * people_count, 2)
+        taxes = round(subtotal * 0.19, 2)
         return {
-            "id_actividad": self.id_actividad,
-            "nombre_actividad": self.nombre,
-            "id_destino": self.id_destino,
-            "fecha_actividad": fecha_actividad,
-            "cantidad_personas": cantidad_personas,
-            "cupos_disponibles": self.cupos_diarios,
-            "tarifa_unitaria": self.precio_persona,
-            "impuestos": impuestos,
-            "total_actividad": round(subtotal + impuestos, 2),
-            "moneda": self.moneda,
-            "disponible": self.cupos_diarios >= cantidad_personas,
+            "id_actividad": self.activity_id,
+            "nombre_actividad": self.name,
+            "id_destino": self.destination_id,
+            "fecha_actividad": activity_date,
+            "cantidad_personas": people_count,
+            "cupos_disponibles": self.daily_quota,
+            "tarifa_unitaria": self.price_per_person,
+            "impuestos": taxes,
+            "total_actividad": round(subtotal + taxes, 2),
+            "moneda": self.currency,
+            "disponible": self.daily_quota >= people_count,
         }

@@ -1,12 +1,12 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # Catálogos transversales (MOD-03 / AIN-03: PAR-03, PAR-08, PAR-09, PAR-07)
-MUNICIPIOS_HOTEL_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
-CATEGORIAS_HOTEL_VALIDAS = {"1_ESTRELLA", "2_ESTRELLAS", "3_ESTRELLAS", "4_ESTRELLAS", "5_ESTRELLAS", "BOUTIQUE"}
-TIPOS_HABITACION_VALIDOS = {"ESTANDAR", "DOBLE", "SUITE", "FAMILIAR"}
-MONEDAS_HOTEL_AIN03 = {"COP", "USD"}
+VALID_HOTEL_MUNICIPALITIES = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
+VALID_HOTEL_CATEGORIES = {"1_ESTRELLA", "2_ESTRELLAS", "3_ESTRELLAS", "4_ESTRELLAS", "5_ESTRELLAS", "BOUTIQUE"}
+VALID_ROOM_TYPES = {"ESTANDAR", "DOBLE", "SUITE", "FAMILIAR"}
+VALID_HOTEL_CURRENCIES_AIN03 = {"COP", "USD"}
 
 
 # HU-017: Esquemas de búsqueda de hoteles
@@ -22,14 +22,14 @@ class HotelItemOut(BaseModel):
     moneda: str
 
 
-class BusquedaHotelesOut(BaseModel):
+class HotelSearchOut(BaseModel):
     mensaje: str
     data: Optional[List[HotelItemOut]] = None
     success: bool
 
 
 # HU-019: Esquemas de consulta de habitaciones y tarifas
-class HabitacionTarifaItemOut(BaseModel):
+class RoomRateItemOut(BaseModel):
     codigo_habitacion: str
     tipo_habitacion: str
     capacidad_maxima: int
@@ -42,25 +42,27 @@ class HabitacionTarifaItemOut(BaseModel):
     moneda: str
 
 
-class ConsultaHabitacionesOut(BaseModel):
+class RoomRatesQueryOut(BaseModel):
     mensaje: str
-    data: Optional[List[HabitacionTarifaItemOut]] = None
+    data: Optional[List[RoomRateItemOut]] = None
     success: bool
 
 
 # HU-021: Esquemas de bloqueo temporal de habitación
-class BloqueoHabitacionIn(BaseModel):
-    id_hotel: str = Field(..., min_length=3, max_length=20)
-    tipo_habitacion: str = Field(..., min_length=3, max_length=20)
-    fecha_entrada: date
-    fecha_salida: date
-    cantidad_habitaciones: int = Field(default=1, ge=1, le=5)
-    huespedes: int = Field(default=2, ge=1, le=10)
-    id_usuario: int = Field(..., gt=0)
-    minutos_bloqueo: int = Field(default=15, ge=5, le=30)
+class RoomLockIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    hotel_id: str = Field(..., alias="id_hotel", min_length=3, max_length=20)
+    room_type: str = Field(..., alias="tipo_habitacion", min_length=3, max_length=20)
+    check_in_date: date = Field(..., alias="fecha_entrada")
+    check_out_date: date = Field(..., alias="fecha_salida")
+    room_count: int = Field(default=1, alias="cantidad_habitaciones", ge=1, le=5)
+    guests: int = Field(default=2, alias="huespedes", ge=1, le=10)
+    user_id: int = Field(..., alias="id_usuario", gt=0)
+    lock_minutes: int = Field(default=15, alias="minutos_bloqueo", ge=5, le=30)
 
 
-class BloqueoHabitacionDataOut(BaseModel):
+class RoomLockDataOut(BaseModel):
     codigo_bloqueo: str
     id_hotel: str
     nombre_hotel: str
@@ -77,9 +79,9 @@ class BloqueoHabitacionDataOut(BaseModel):
     expira_en: str
 
 
-class BloqueoHabitacionOut(BaseModel):
+class RoomLockOut(BaseModel):
     mensaje: str
-    data: Optional[BloqueoHabitacionDataOut] = None
+    data: Optional[RoomLockDataOut] = None
     success: bool
 
 
@@ -87,164 +89,164 @@ class BloqueoHabitacionOut(BaseModel):
 class Hotel:
     def __init__(
         self,
-        id_hotel: str,
-        nombre: str,
-        municipio: str,
-        categoria: str,
-        direccion: str,
-        calificacion: float,
-        habitaciones_disponibles: int,
-        precio_minimo_noche: float,
-        moneda: str = "COP",
-        activo: bool = True,
+        hotel_id: str,
+        name: str,
+        municipality: str,
+        category: str,
+        address: str,
+        rating: float,
+        available_rooms: int,
+        min_price_per_night: float,
+        currency: str = "COP",
+        active: bool = True,
     ):
-        self.id_hotel = id_hotel
-        self.nombre = nombre
-        self.municipio = municipio
-        self.categoria = categoria
-        self.direccion = direccion
-        self.calificacion = calificacion
-        self.habitaciones_disponibles = habitaciones_disponibles
-        self.precio_minimo_noche = precio_minimo_noche
-        self.moneda = moneda
-        self.activo = activo
+        self.hotel_id = hotel_id
+        self.name = name
+        self.municipality = municipality
+        self.category = category
+        self.address = address
+        self.rating = rating
+        self.available_rooms = available_rooms
+        self.min_price_per_night = min_price_per_night
+        self.currency = currency
+        self.active = active
 
     # HU-017: Serialización del hotel
     def to_response(self) -> dict:
         return {
-            "id_hotel": self.id_hotel,
-            "nombre": self.nombre,
-            "municipio": self.municipio,
-            "categoria": self.categoria,
-            "direccion": self.direccion,
-            "calificacion": self.calificacion,
-            "habitaciones_disponibles": self.habitaciones_disponibles,
-            "precio_minimo_noche": self.precio_minimo_noche,
-            "moneda": self.moneda,
+            "id_hotel": self.hotel_id,
+            "nombre": self.name,
+            "municipio": self.municipality,
+            "categoria": self.category,
+            "direccion": self.address,
+            "calificacion": self.rating,
+            "habitaciones_disponibles": self.available_rooms,
+            "precio_minimo_noche": self.min_price_per_night,
+            "moneda": self.currency,
         }
 
     # HU-019: Cálculo de opciones de habitación y tarifas por estadía
-    def generar_habitaciones_tarifas(
-        self, noches: int, huespedes: int, tipo_habitacion: Optional[str] = None
+    def generate_rooms_and_rates(
+        self, nights: int, guests: int, room_type: Optional[str] = None
     ) -> List[dict]:
-        catalogo_habitaciones = [
+        room_catalog = [
             {
-                "codigo_habitacion": f"{self.id_hotel}-HAB-EST",
+                "codigo_habitacion": f"{self.hotel_id}-HAB-EST",
                 "tipo_habitacion": "ESTANDAR",
                 "capacidad_maxima": 2,
                 "incluye_desayuno": False,
                 "politica_cancelacion": "Cancelación gratuita hasta 48h antes",
-                "multiplicador": 1.0,
+                "multiplier": 1.0,
             },
             {
-                "codigo_habitacion": f"{self.id_hotel}-HAB-DOB",
+                "codigo_habitacion": f"{self.hotel_id}-HAB-DOB",
                 "tipo_habitacion": "DOBLE",
                 "capacidad_maxima": 3,
                 "incluye_desayuno": True,
                 "politica_cancelacion": "Cancelación gratuita hasta 24h antes",
-                "multiplicador": 1.25,
+                "multiplier": 1.25,
             },
             {
-                "codigo_habitacion": f"{self.id_hotel}-HAB-SUI",
+                "codigo_habitacion": f"{self.hotel_id}-HAB-SUI",
                 "tipo_habitacion": "SUITE",
                 "capacidad_maxima": 4,
                 "incluye_desayuno": True,
                 "politica_cancelacion": "Reembolsable al 100% hasta el check-in",
-                "multiplicador": 1.75,
+                "multiplier": 1.75,
             },
             {
-                "codigo_habitacion": f"{self.id_hotel}-HAB-FAM",
+                "codigo_habitacion": f"{self.hotel_id}-HAB-FAM",
                 "tipo_habitacion": "FAMILIAR",
                 "capacidad_maxima": 6,
                 "incluye_desayuno": True,
                 "politica_cancelacion": "Cancelación gratuita hasta 48h antes",
-                "multiplicador": 2.1,
+                "multiplier": 2.1,
             },
         ]
 
-        resultado = []
-        for hab in catalogo_habitaciones:
-            if tipo_habitacion and hab["tipo_habitacion"] != tipo_habitacion:
+        result = []
+        for room in room_catalog:
+            if room_type and room["tipo_habitacion"] != room_type:
                 continue
-            if hab["capacidad_maxima"] < huespedes:
+            if room["capacidad_maxima"] < guests:
                 continue
-            tarifa_noche = round(self.precio_minimo_noche * hab["multiplicador"], 2)
-            subtotal = round(tarifa_noche * noches, 2)
-            impuestos = round(subtotal * 0.19, 2)
-            resultado.append({
-                "codigo_habitacion": hab["codigo_habitacion"],
-                "tipo_habitacion": hab["tipo_habitacion"],
-                "capacidad_maxima": hab["capacidad_maxima"],
-                "incluye_desayuno": hab["incluye_desayuno"],
-                "politica_cancelacion": hab["politica_cancelacion"],
-                "tarifa_noche": tarifa_noche,
-                "noches": noches,
-                "impuestos": impuestos,
-                "total_estadia": round(subtotal + impuestos, 2),
-                "moneda": self.moneda,
+            rate_per_night = round(self.min_price_per_night * room["multiplier"], 2)
+            subtotal = round(rate_per_night * nights, 2)
+            taxes = round(subtotal * 0.19, 2)
+            result.append({
+                "codigo_habitacion": room["codigo_habitacion"],
+                "tipo_habitacion": room["tipo_habitacion"],
+                "capacidad_maxima": room["capacidad_maxima"],
+                "incluye_desayuno": room["incluye_desayuno"],
+                "politica_cancelacion": room["politica_cancelacion"],
+                "tarifa_noche": rate_per_night,
+                "noches": nights,
+                "impuestos": taxes,
+                "total_estadia": round(subtotal + taxes, 2),
+                "moneda": self.currency,
             })
-        return resultado
+        return result
 
     # HU-021: Cálculo de total retenido para bloqueo temporal
-    def calcular_total_bloqueo(self, tipo_habitacion: str, noches: int, cantidad_habitaciones: int) -> float:
-        multiplicadores = {
+    def calculate_lock_total(self, room_type: str, nights: int, room_count: int) -> float:
+        multipliers = {
             "ESTANDAR": 1.0,
             "DOBLE": 1.25,
             "SUITE": 1.75,
             "FAMILIAR": 2.1,
         }
-        tarifa_noche = self.precio_minimo_noche * multiplicadores[tipo_habitacion]
-        subtotal = tarifa_noche * noches * cantidad_habitaciones
+        rate_per_night = self.min_price_per_night * multipliers[room_type]
+        subtotal = rate_per_night * nights * room_count
         return round(subtotal * 1.19, 2)
 
 
 # HU-021: Entidad de dominio para retención temporal de habitación
-class BloqueoHabitacion:
+class RoomLock:
     def __init__(
         self,
-        codigo_bloqueo: str,
+        lock_code: str,
         hotel: Hotel,
-        tipo_habitacion: str,
-        fecha_entrada: date,
-        fecha_salida: date,
-        noches: int,
-        cantidad_habitaciones: int,
-        huespedes: int,
-        id_usuario: int,
-        total_retenido: float,
-        minutos_bloqueo: int = 15,
+        room_type: str,
+        check_in_date: date,
+        check_out_date: date,
+        nights: int,
+        room_count: int,
+        guests: int,
+        user_id: int,
+        retained_total: float,
+        lock_minutes: int = 15,
     ):
-        self.codigo_bloqueo = codigo_bloqueo
-        self.id_hotel = hotel.id_hotel
-        self.nombre_hotel = hotel.nombre
-        self.tipo_habitacion = tipo_habitacion
-        self.fecha_entrada = fecha_entrada
-        self.fecha_salida = fecha_salida
-        self.noches = noches
-        self.cantidad_habitaciones = cantidad_habitaciones
-        self.huespedes = huespedes
-        self.id_usuario = id_usuario
-        self.estado = "BLOQUEADA_TEMPORALMENTE"
-        self.total_retenido = total_retenido
-        self.moneda = hotel.moneda
-        self.expira_en = (
-            datetime.now(timezone.utc) + timedelta(minutes=minutos_bloqueo)
+        self.lock_code = lock_code
+        self.hotel_id = hotel.hotel_id
+        self.hotel_name = hotel.name
+        self.room_type = room_type
+        self.check_in_date = check_in_date
+        self.check_out_date = check_out_date
+        self.nights = nights
+        self.room_count = room_count
+        self.guests = guests
+        self.user_id = user_id
+        self.status = "BLOQUEADA_TEMPORALMENTE"
+        self.retained_total = retained_total
+        self.currency = hotel.currency
+        self.expires_at = (
+            datetime.now(timezone.utc) + timedelta(minutes=lock_minutes)
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     def to_response(self) -> dict:
         return {
-            "codigo_bloqueo": self.codigo_bloqueo,
-            "id_hotel": self.id_hotel,
-            "nombre_hotel": self.nombre_hotel,
-            "tipo_habitacion": self.tipo_habitacion,
-            "fecha_entrada": self.fecha_entrada,
-            "fecha_salida": self.fecha_salida,
-            "noches": self.noches,
-            "cantidad_habitaciones": self.cantidad_habitaciones,
-            "huespedes": self.huespedes,
-            "id_usuario": self.id_usuario,
-            "estado": self.estado,
-            "total_retenido": self.total_retenido,
-            "moneda": self.moneda,
-            "expira_en": self.expira_en,
+            "codigo_bloqueo": self.lock_code,
+            "id_hotel": self.hotel_id,
+            "nombre_hotel": self.hotel_name,
+            "tipo_habitacion": self.room_type,
+            "fecha_entrada": self.check_in_date,
+            "fecha_salida": self.check_out_date,
+            "noches": self.nights,
+            "cantidad_habitaciones": self.room_count,
+            "huespedes": self.guests,
+            "id_usuario": self.user_id,
+            "estado": self.status,
+            "total_retenido": self.retained_total,
+            "moneda": self.currency,
+            "expira_en": self.expires_at,
         }

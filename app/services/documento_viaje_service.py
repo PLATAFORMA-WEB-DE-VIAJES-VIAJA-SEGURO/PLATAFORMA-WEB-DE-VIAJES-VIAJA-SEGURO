@@ -1,84 +1,83 @@
 from datetime import date
 from typing import List
 from app.domain.documento_viaje import (
-    DocumentoViajeCreate,
-    DocumentoViajeDataOut,
-    RegistroDocumentoViajeOut,
-    TIPOS_DOCUMENTO_VIAJE_VALIDOS,
-    PAISES_EMISION_VALIDOS,
+    TravelDocumentCreate,
+    TravelDocumentDataOut,
+    TravelDocumentRegistrationOut,
+    VALID_TRAVEL_DOCUMENT_TYPES,
+    VALID_ISSUING_COUNTRIES,
 )
-from app.repositories.documento_viaje_repository import DocumentoViajeRepository
-from app.repositories.usuario_repository import UsuarioRepository
+from app.repositories.documento_viaje_repository import TravelDocumentRepository
+from app.repositories.usuario_repository import UserRepository
 
 
-class ErrorCatalogoDocumentoInvalido(Exception):
+class InvalidDocumentCatalogError(Exception):
     pass
 
 
-class ErrorReglaNegocioDocumento(Exception):
+class DocumentBusinessRuleError(Exception):
     pass
 
 
-class DocumentoViajeService:
-    def __init__(self, repo: DocumentoViajeRepository, usuario_repo: UsuarioRepository):
+class TravelDocumentService:
+    def __init__(self, repo: TravelDocumentRepository, user_repo: UserRepository):
         self.repo = repo
-        self.usuario_repo = usuario_repo
+        self.user_repo = user_repo
 
-    def _validar_catalogos_ain01(self, datos: DocumentoViajeCreate) -> None:
+    def _validate_catalogs_ain01(self, data: TravelDocumentCreate) -> None:
         # Consumo transversal simulado de AIN-01 (PAR-01 y PAR-02)
         if (
-            datos.tipo_documento not in TIPOS_DOCUMENTO_VIAJE_VALIDOS
-            or datos.pais_emision not in PAISES_EMISION_VALIDOS
+            data.document_type not in VALID_TRAVEL_DOCUMENT_TYPES
+            or data.issuing_country not in VALID_ISSUING_COUNTRIES
         ):
-            raise ErrorCatalogoDocumentoInvalido(
+            raise InvalidDocumentCatalogError(
                 "El tipo de documento o país de emisión proporcionado no son válidos"
             )
 
-    def registrar_documento(
-        self, id_usuario: int, datos: DocumentoViajeCreate
-    ) -> RegistroDocumentoViajeOut:
-        self._validar_catalogos_ain01(datos)
+    def register_document(
+        self, user_id: int, data: TravelDocumentCreate
+    ) -> TravelDocumentRegistrationOut:
+        self._validate_catalogs_ain01(data)
 
         # Verifica que el usuario exista y esté activo en MOD-01
-        usuarios_activos = self.usuario_repo.obtener_todos()
-        usuario = next((u for u in usuarios_activos if u.id_usuario == id_usuario), None)
-        if not usuario:
-            raise ErrorReglaNegocioDocumento(
+        active_users = self.user_repo.get_all()
+        user = next((item for item in active_users if item.user_id == user_id), None)
+        if not user:
+            raise DocumentBusinessRuleError(
                 "El usuario indicado no existe o no se encuentra activo"
             )
 
         # RN-08: Fecha de vencimiento debe ser posterior a la fecha actual
-        if datos.fecha_vencimiento <= date.today():
-            raise ErrorReglaNegocioDocumento(
+        if data.expiration_date <= date.today():
+            raise DocumentBusinessRuleError(
                 "El documento de viaje se encuentra vencido o expira hoy"
             )
 
         # RN-08: No permitir duplicar el mismo tipo y número de documento activo en el usuario
-        if self.repo.obtener_duplicado_activo(
-            id_usuario, datos.tipo_documento, datos.numero_documento
+        if self.repo.get_active_duplicate(
+            user_id, data.document_type, data.document_number
         ):
-            raise ErrorReglaNegocioDocumento(
+            raise DocumentBusinessRuleError(
                 "El documento de viaje ya se encuentra registrado en el perfil del usuario"
             )
 
-        creado = self.repo.crear(
-            id_usuario=id_usuario,
-            tipo_documento=datos.tipo_documento,
-            numero_documento=datos.numero_documento,
-            pais_emision=datos.pais_emision,
-            fecha_vencimiento=datos.fecha_vencimiento,
-            es_documento_principal=datos.es_documento_principal,
+        created_doc = self.repo.create(
+            user_id=user_id,
+            document_type=data.document_type,
+            document_number=data.document_number,
+            issuing_country=data.issuing_country,
+            expiration_date=data.expiration_date,
+            is_primary_document=data.is_primary_document,
         )
 
-        return RegistroDocumentoViajeOut(
+        return TravelDocumentRegistrationOut(
             mensaje="Documento de viaje registrado exitosamente",
-            data=DocumentoViajeDataOut(**creado.to_response()),
+            data=TravelDocumentDataOut(**created_doc.to_response()),
             success=True,
         )
 
-    def listar_documentos_usuario(self, id_usuario: int) -> List[DocumentoViajeDataOut]:
+    def list_user_documents(self, user_id: int) -> List[TravelDocumentDataOut]:
         return [
-            DocumentoViajeDataOut(**d.to_response())
-            for d in self.repo.obtener_por_usuario(id_usuario)
+            TravelDocumentDataOut(**doc.to_response())
+            for doc in self.repo.get_by_user(user_id)
         ]
-    

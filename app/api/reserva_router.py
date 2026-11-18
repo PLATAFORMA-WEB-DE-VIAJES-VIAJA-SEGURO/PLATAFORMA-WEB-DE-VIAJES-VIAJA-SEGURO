@@ -4,55 +4,55 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Path, Query, status
 from fastapi.responses import JSONResponse
 from app.domain.reserva import (
-    ItemCarritoCreate,
-    ItemCarritoResponse,
-    ReglaNegocioRN33Exception,
-    DatosItemCarritoInvalidosException,
-    ServiciosCarritoNoDisponiblesException,
-    ConsultaCarritoResponse,
-    ReglaNegocioRN35Exception,
-    UsuarioCarritoInvalidoException,
-    ServiciosConsultaCarritoNoDisponiblesException,
-    CalculoTotalResponse,
-    ReglaNegocioRN37Exception,
-    CarritoNoIdentificadoException,
-    ServiciosCalculoTotalNoDisponiblesException,
-    CierreCarritoCreate,
-    CierreCarritoResponse,
-    ReglaNegocioRN38Exception,
-    DatosCierreCompraInvalidosException,
-    ServiciosCierreNoDisponiblesException,
-    ReservaCreate,
-    ReservaResponse,
-    ReglaNegocioRN39Exception,
-    DatosReservaInvalidosException,
-    ServiciosReservaNoDisponiblesException,
-    RegistrarViajerosCreate,
-    RegistrarViajerosResponse,
-    ReglaNegocioRN40Exception,
-    DatosViajerosInvalidosException,
-    ServiciosViajerosNoDisponiblesException,
-    CancelarReservaCreate,
-    CancelarReservaResponse,
-    ReglaNegocioRN43Exception,
-    MotivoCancelacionInvalidoException,
-    ServiciosCancelacionNoDisponiblesException,
+    CartItemCreate,
+    CartItemResponse,
+    BusinessRuleRN33Exception,
+    InvalidCartItemDataException,
+    CartServicesUnavailableException,
+    CartQueryResponse,
+    BusinessRuleRN35Exception,
+    InvalidCartUserException,
+    CartQueryServicesUnavailableException,
+    TotalCalculationResponse,
+    BusinessRuleRN37Exception,
+    UnidentifiedCartException,
+    TotalCalculationServicesUnavailableException,
+    CartCheckoutCreate,
+    CartCheckoutResponse,
+    BusinessRuleRN38Exception,
+    InvalidCheckoutDataException,
+    CheckoutServicesUnavailableException,
+    ReservationCreate,
+    ReservationResponse,
+    BusinessRuleRN39Exception,
+    InvalidReservationDataException,
+    ReservationServicesUnavailableException,
+    RegisterTravelersCreate,
+    RegisterTravelersResponse,
+    BusinessRuleRN40Exception,
+    InvalidTravelersDataException,
+    TravelersServicesUnavailableException,
+    CancelReservationCreate,
+    CancelReservationResponse,
+    BusinessRuleRN43Exception,
+    InvalidCancellationReasonException,
+    CancellationServicesUnavailableException,
 )
-from app.services.reserva_service import ReservaService
-from app.repositories.reserva_repository import reserva_repository
+from app.services.reserva_service import ReservationService
+from app.repositories.reserva_repository import reservation_repository
 
 router = APIRouter(
     prefix="/api/v1/reservas",
     tags=["Compra y Reservas"],
 )
 
-servicio = ReservaService(repo=reserva_repository)
+service = ReservationService(repo=reservation_repository)
 
 # Documentación OpenAPI para HU-033 (Agregar ítem al carrito)
-RESPUESTAS_OPENAPI_AGREGAR_ITEM = {
+OPENAPI_ADD_ITEM_RESPONSES = {
     201: {
         "description": "Ítem agregado al carrito exitosamente",
-        "model": ItemCarritoResponse,
+        "model": CartItemResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -110,10 +110,10 @@ RESPUESTAS_OPENAPI_AGREGAR_ITEM = {
 }
 
 # Documentación OpenAPI para HU-035 (Consultar carrito)
-RESPUESTAS_OPENAPI_CONSULTAR_CARRITO = {
+OPENAPI_GET_CART_RESPONSES = {
     200: {
         "description": "Carrito consultado exitosamente",
-        "model": ConsultaCarritoResponse,
+        "model": CartQueryResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -184,10 +184,10 @@ RESPUESTAS_OPENAPI_CONSULTAR_CARRITO = {
 }
 
 # Documentación OpenAPI para HU-037 (Calcular total de la compra)
-RESPUESTAS_OPENAPI_CALCULAR_TOTAL = {
+OPENAPI_CALCULATE_TOTAL_RESPONSES = {
     200: {
         "description": "Total de la compra calculado exitosamente",
-        "model": CalculoTotalResponse,
+        "model": TotalCalculationResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -244,10 +244,10 @@ RESPUESTAS_OPENAPI_CALCULAR_TOTAL = {
 }
 
 # Documentación OpenAPI para HU-038 (Cerrar compra)
-RESPUESTAS_OPENAPI_CIERRE_COMPRA = {
+OPENAPI_CHECKOUT_RESPONSES = {
     201: {
         "description": "Compra cerrada exitosamente, pendiente de confirmación de pago",
-        "model": CierreCarritoResponse,
+        "model": CartCheckoutResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -303,10 +303,10 @@ RESPUESTAS_OPENAPI_CIERRE_COMPRA = {
 }
 
 # Documentación OpenAPI para HU-039 (Crear reserva)
-RESPUESTAS_OPENAPI_CREAR_RESERVA = {
+OPENAPI_CREATE_RESERVATION_RESPONSES = {
     201: {
         "description": "Reserva creada exitosamente",
-        "model": ReservaResponse,
+        "model": ReservationResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -364,10 +364,10 @@ RESPUESTAS_OPENAPI_CREAR_RESERVA = {
 }
 
 # Documentación OpenAPI para HU-040 (Registrar viajeros)
-RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS = {
+OPENAPI_REGISTER_TRAVELERS_RESPONSES = {
     201: {
         "description": "Viajeros registrados en la reserva exitosamente",
-        "model": RegistrarViajerosResponse,
+        "model": RegisterTravelersResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -422,10 +422,10 @@ RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS = {
 }
 
 # Documentación OpenAPI para HU-043 (Cancelar reserva)
-RESPUESTAS_OPENAPI_CANCELAR_RESERVA = {
+OPENAPI_CANCEL_RESERVATION_RESPONSES = {
     200: {
         "description": "Reserva cancelada exitosamente",
-        "model": CancelarReservaResponse,
+        "model": CancelReservationResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -484,21 +484,21 @@ RESPUESTAS_OPENAPI_CANCELAR_RESERVA = {
 
 @router.post(
     "/carrito/items",
-    response_model=ItemCarritoResponse,
+    response_model=CartItemResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=RESPUESTAS_OPENAPI_AGREGAR_ITEM,
+    responses=OPENAPI_ADD_ITEM_RESPONSES,
     summary="Agregar ítem al carrito (HU-033)",
     description="Añade un servicio validado (vuelo, hotel o paquete) al carrito activo del viajero verificando vigencia y no duplicidad del bloqueo bajo RN-33.",
 )
-def agregar_item_carrito(payload: ItemCarritoCreate):
+def add_cart_item(payload: CartItemCreate):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-    es_simulacion_falla = (
-        payload.id_usuario == 503
-        or payload.id_referencia_bloqueo.strip().upper() in ("BLK-503", "503")
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = (
+        payload.user_id == 503
+        or payload.lock_reference_id.strip().upper() in ("BLK-503", "503")
     )
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -509,21 +509,21 @@ def agregar_item_carrito(payload: ItemCarritoCreate):
         )
 
     try:
-        return servicio.agregar_item_carrito(payload)
-    except ReglaNegocioRN33Exception as e:
+        return service.add_cart_item(payload)
+    except BusinessRuleRN33Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except DatosItemCarritoInvalidosException as e:
+    except InvalidCartItemDataException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosCarritoNoDisponiblesException as e:
+    except CartServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -538,20 +538,20 @@ def agregar_item_carrito(payload: ItemCarritoCreate):
 
 @router.get(
     "/carrito",
-    response_model=ConsultaCarritoResponse,
+    response_model=CartQueryResponse,
     status_code=status.HTTP_200_OK,
-    responses=RESPUESTAS_OPENAPI_CONSULTAR_CARRITO,
+    responses=OPENAPI_GET_CART_RESPONSES,
     summary="Consultar carrito (HU-035)",
     description="Retorna el detalle completo del carrito activo del viajero verificando la vigencia de los bloqueos temporales de cada ítem bajo RN-35.",
 )
-def consultar_carrito(
-    id_usuario: Optional[int] = Query(default=1, description="Identificador del usuario titular del carrito (ej: 1)"),
+def get_cart(
+    user_id: Optional[int] = Query(default=1, alias="id_usuario", description="Identificador del usuario titular del carrito (ej: 1)"),
 ):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-    es_simulacion_falla = id_usuario == 503
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = user_id == 503
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -562,21 +562,21 @@ def consultar_carrito(
         )
 
     try:
-        return servicio.consultar_carrito(id_usuario=id_usuario)
-    except ReglaNegocioRN35Exception as e:
+        return service.get_cart(user_id=user_id)
+    except BusinessRuleRN35Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except UsuarioCarritoInvalidoException as e:
+    except InvalidCartUserException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosConsultaCarritoNoDisponiblesException as e:
+    except CartQueryServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -591,20 +591,20 @@ def consultar_carrito(
 
 @router.get(
     "/carrito/total",
-    response_model=CalculoTotalResponse,
+    response_model=TotalCalculationResponse,
     status_code=status.HTTP_200_OK,
-    responses=RESPUESTAS_OPENAPI_CALCULAR_TOTAL,
+    responses=OPENAPI_CALCULATE_TOTAL_RESPONSES,
     summary="Calcular total de la compra (HU-037)",
     description="Liquida matemáticamente el valor exacto consolidado del carrito incluyendo subtotal, impuestos y descuentos aplicando precisión decimal según AIN-05 y validando RN-37.",
 )
-def calcular_total_compra(
-    id_usuario: Optional[int] = Query(default=1, description="Identificador del usuario titular del carrito (ej: 1)"),
+def calculate_purchase_total(
+    user_id: Optional[int] = Query(default=1, alias="id_usuario", description="Identificador del usuario titular del carrito (ej: 1)"),
 ):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-    es_simulacion_falla = id_usuario == 503
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = user_id == 503
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -615,21 +615,21 @@ def calcular_total_compra(
         )
 
     try:
-        return servicio.calcular_total_compra(id_usuario=id_usuario)
-    except ReglaNegocioRN37Exception as e:
+        return service.calculate_purchase_total(user_id=user_id)
+    except BusinessRuleRN37Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except CarritoNoIdentificadoException as e:
+    except UnidentifiedCartException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosCalculoTotalNoDisponiblesException as e:
+    except TotalCalculationServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -644,18 +644,18 @@ def calcular_total_compra(
 
 @router.post(
     "/carrito/cierre",
-    response_model=CierreCarritoResponse,
+    response_model=CartCheckoutResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=RESPUESTAS_OPENAPI_CIERRE_COMPRA,
+    responses=OPENAPI_CHECKOUT_RESPONSES,
     summary="Cerrar compra (HU-038)",
     description="Ejecuta el cierre formal del carrito de compras transicionándolo de ABIERTO a CERRADO, revalidando identidad (AIN-08), bloqueos (AIN-09, AIN-10) e iniciando el cobro (AIN-14) bajo RN-38.",
 )
-def cerrar_compra(payload: CierreCarritoCreate):
+def close_purchase(payload: CartCheckoutCreate):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-    es_simulacion_falla = payload.id_carrito == 503 or payload.id_usuario == 503
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = payload.cart_id == 503 or payload.user_id == 503
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -666,21 +666,21 @@ def cerrar_compra(payload: CierreCarritoCreate):
         )
 
     try:
-        return servicio.cerrar_compra(payload)
-    except ReglaNegocioRN38Exception as e:
+        return service.close_purchase(payload)
+    except BusinessRuleRN38Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except DatosCierreCompraInvalidosException as e:
+    except InvalidCheckoutDataException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosCierreNoDisponiblesException as e:
+    except CheckoutServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -695,18 +695,18 @@ def cerrar_compra(payload: CierreCarritoCreate):
 
 @router.post(
     "",
-    response_model=ReservaResponse,
+    response_model=ReservationResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=RESPUESTAS_OPENAPI_CREAR_RESERVA,
+    responses=OPENAPI_CREATE_RESERVATION_RESPONSES,
     summary="Crear reserva (HU-039)",
     description="Crea el registro maestro de la reserva con un código único localizador (VS-YYYY-XXXX) en estado PENDIENTE_PAGO consultando AIN-05 y validando RN-39.",
 )
-def crear_reserva(payload: ReservaCreate):
+def create_reservation(payload: ReservationCreate):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-    es_simulacion_falla = payload.id_carrito == 503 or payload.id_usuario == 503
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = payload.cart_id == 503 or payload.user_id == 503
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -717,21 +717,21 @@ def crear_reserva(payload: ReservaCreate):
         )
 
     try:
-        return servicio.crear_reserva(payload)
-    except ReglaNegocioRN39Exception as e:
+        return service.create_reservation(payload)
+    except BusinessRuleRN39Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except DatosReservaInvalidosException as e:
+    except InvalidReservationDataException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosReservaNoDisponiblesException as e:
+    except ReservationServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -746,21 +746,21 @@ def crear_reserva(payload: ReservaCreate):
 
 @router.post(
     "/{id_reserva}/viajeros",
-    response_model=RegistrarViajerosResponse,
+    response_model=RegisterTravelersResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=RESPUESTAS_OPENAPI_REGISTRAR_VIAJEROS,
+    responses=OPENAPI_REGISTER_TRAVELERS_RESPONSES,
     summary="Registrar viajeros (HU-040)",
     description="Registra el listado nominal de viajeros en la reserva validando tipos de documento en AIN-01 y verificando coincidencia de cupos y unicidad de documento bajo RN-40.",
 )
-def registrar_viajeros(
-    payload: RegistrarViajerosCreate,
-    id_reserva: int = Path(..., gt=0, description="Identificador único de la reserva (ej: 9001)"),
+def register_travelers(
+    payload: RegisterTravelersCreate,
+    reservation_id: int = Path(..., alias="id_reserva", gt=0, description="Identificador único de la reserva (ej: 9001)"),
 ):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
-    es_simulacion_falla = id_reserva == 503
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = reservation_id == 503
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -771,21 +771,21 @@ def registrar_viajeros(
         )
 
     try:
-        return servicio.registrar_viajeros(id_reserva=id_reserva, datos=payload)
-    except ReglaNegocioRN40Exception as e:
+        return service.register_travelers(reservation_id=reservation_id, data=payload)
+    except BusinessRuleRN40Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except DatosViajerosInvalidosException as e:
+    except InvalidTravelersDataException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosViajerosNoDisponiblesException as e:
+    except TravelersServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -800,23 +800,21 @@ def registrar_viajeros(
 
 @router.post(
     "/{id_reserva}/cancelacion",
-    response_model=CancelarReservaResponse,
+    response_model=CancelReservationResponse,
     status_code=status.HTTP_200_OK,
-    responses=RESPUESTAS_OPENAPI_CANCELAR_RESERVA,
+    responses=OPENAPI_CANCEL_RESERVATION_RESPONSES,
     summary="Cancelar reserva (HU-043)",
     description="Ejecuta la cancelación controlada de la reserva validando que su estado admita anulación en AIN-05 bajo RN-43 y notificando vía AIN-16.",
 )
-def cancelar_reserva(
-    payload: CancelarReservaCreate,
-    id_reserva: int = Path(..., gt=0, description="Identificador único de la reserva a cancelar (ej: 9001)"),
+def cancel_reservation(
+    payload: CancelReservationCreate,
+    reservation_id: int = Path(..., alias="id_reserva", gt=0, description="Identificador único de la reserva a cancelar (ej: 9001)"),
 ):
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    is_simulated_failure = reservation_id == 503 or payload.user_id == 503
 
-    # Caso 4: Simulación de fallo de disponibilidad (503 Service Unavailable)
-    es_simulacion_falla = id_reserva == 503 or payload.id_usuario == 503
-
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -827,39 +825,23 @@ def cancelar_reserva(
         )
 
     try:
-        return servicio.cancelar_reserva(id_reserva=id_reserva, datos=payload)
-    except ReglaNegocioRN43Exception as e:
-        # Caso 2: Error por Regla de Negocio RN-43 -> 409 Conflict
+        return service.cancel_reservation(reservation_id=reservation_id, data=payload)
+    except BusinessRuleRN43Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except MotivoCancelacionInvalidoException as e:
-        # Caso 3: Error de Validación -> 400 Bad Request
+    except InvalidCancellationReasonException as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ServiciosCancelacionNoDisponiblesException as e:
-        # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
+    except CancellationServicesUnavailableException as exc:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "mensaje": str(e),
-                "data": None,
-                "success": False,
-            },
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
-        # Fallos imprevistos ocultando trazas técnicas -> 503
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={

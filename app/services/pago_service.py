@@ -1,53 +1,54 @@
 import re
 from app.domain.pago import (
-    MediosPagoResponse,
-    MediosPagoData,
-    MedioPagoItem,
-    MonedaNoSoportadaException,
-    ReglaNegocioRN45Exception
+    PaymentMethodsResponse,
+    PaymentMethodsData,
+    PaymentMethodItem,
+    UnsupportedCurrencyException,
+    BusinessRuleRN45Exception,
 )
-from app.repositories.pago_repository import PagoRepository
+from app.repositories.pago_repository import PaymentRepository
 
-class PagoService:
-    def __init__(self, repo: PagoRepository):
+
+class PaymentService:
+    def __init__(self, repo: PaymentRepository):
         self.repo = repo
 
-    def consultar_medios_pago(self, moneda: str = "COP") -> MediosPagoResponse:
-        moneda_limpia = (moneda or "").strip().upper()
+    def get_payment_methods(self, currency: str = "COP") -> PaymentMethodsResponse:
+        cleaned_currency = (currency or "").strip().upper()
 
         # ── VALIDACIÓN DE FORMATO DE PARÁMETROS (400 Bad Request) ──────
         # El código de moneda debe ser un código alfabético de 3 letras (formato ISO 4217)
-        if not moneda_limpia or not re.match(r"^[A-Z]{3}$", moneda_limpia):
-            raise MonedaNoSoportadaException("Código de moneda no soportado")
+        if not cleaned_currency or not re.match(r"^[A-Z]{3}$", cleaned_currency):
+            raise UnsupportedCurrencyException("Código de moneda no soportado")
 
         # ── REGLA DE NEGOCIO RN-45 (409 Conflict) ──────────────────────
         # Solo se exponen medios activos en el catálogo PAR-06 / AIN-06 y pasarela AEX-04.
         # Si la moneda no tiene medios habilitados (como XXX, EUR, etc.), se rechaza por RN-45.
-        medios_raw = self.repo.consultar_medios_activos(moneda_limpia)
+        raw_methods = self.repo.get_active_methods(cleaned_currency)
 
-        if not medios_raw:
-            raise ReglaNegocioRN45Exception(
+        if not raw_methods:
+            raise BusinessRuleRN45Exception(
                 "No hay medios de pago habilitados temporalmente para esta moneda"
             )
 
         # ── CONSTRUCCIÓN DE RESPUESTA ESTANDARIZADA (200 OK) ────────────
         items = [
-            MedioPagoItem(
-                codigo=m["codigo"],
-                nombre=m["nombre"],
-                tipo=m["tipo"],
-                activo=m["activo"]
+            PaymentMethodItem(
+                codigo=method["codigo"],
+                nombre=method["nombre"],
+                tipo=method["tipo"],
+                activo=method["activo"],
             )
-            for m in medios_raw
+            for method in raw_methods
         ]
 
-        data = MediosPagoData(
-            moneda=moneda_limpia,
-            medios_pago=items
+        response_data = PaymentMethodsData(
+            moneda=cleaned_currency,
+            medios_pago=items,
         )
 
-        return MediosPagoResponse(
+        return PaymentMethodsResponse(
             mensaje="Medios de pago consultados exitosamente",
-            data=data,
-            success=True
+            data=response_data,
+            success=True,
         )

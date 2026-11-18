@@ -1,53 +1,51 @@
 from app.domain.soporte import (
-    CasoSoporteCreate,
-    CasoSoporteResponse,
-    CasoSoporteData,
-    ReglaNegocioRN51Exception,
-    ValidacionParametrosException
+    SupportCaseCreate,
+    SupportCaseResponse,
+    SupportCaseData,
+    BusinessRuleRN51Exception,
+    SupportParameterValidationException,
 )
-from app.repositories.soporte_repository import SoporteRepository
+from app.repositories.soporte_repository import SupportRepository
 
-class SoporteService:
-    def __init__(self, repo: SoporteRepository):
+
+class SupportService:
+    def __init__(self, repo: SupportRepository):
         self.repo = repo
 
-    def radicar_caso(self, datos: CasoSoporteCreate) -> CasoSoporteResponse:
+    def file_case(self, data: SupportCaseCreate) -> SupportCaseResponse:
         # ── VALIDACIONES DE CAMPOS OBLIGATORIOS (400 Bad Request) ───────
-        if not datos.tipo_caso or not datos.asunto or not datos.descripcion:
-            raise ValidacionParametrosException("El tipo de caso, asunto o descripción son obligatorios")
+        if not data.case_type or not data.subject or not data.description:
+            raise SupportParameterValidationException("El tipo de caso, asunto o descripción son obligatorios")
 
         # ── APLICACIÓN DE LA REGLA DE NEGOCIO RN-51 (409 Conflict) ──────
         # Duplicidad de caso abierto para la misma reserva y tipo de caso
-        if datos.codigo_reserva:
-            if self.repo.existe_caso_abierto_identico(datos.codigo_reserva, datos.tipo_caso):
-                raise ReglaNegocioRN51Exception(
+        if data.reservation_code:
+            if self.repo.has_identical_open_case(data.reservation_code, data.case_type):
+                raise BusinessRuleRN51Exception(
                     "Ya existe un caso abierto idéntico para la misma reserva"
                 )
 
         # ── GENERACIÓN Y RADICACIÓN DEL CASO (ESTADO ABIERTO) ───────────
-        registro = self.repo.radicar_caso(
-            id_usuario=datos.id_usuario,
-            codigo_reserva=datos.codigo_reserva,
-            tipo_caso=datos.tipo_caso,
-            asunto=datos.asunto,
-            descripcion=datos.descripcion
+        record = self.repo.create_case(
+            user_id=data.user_id,
+            reservation_code=data.reservation_code,
+            case_type=data.case_type,
+            subject=data.subject,
+            description=data.description,
         )
-
-        # ── INTEGRACIÓN SIMULADA CON AIN-16 / AEX-06 (NOTIFICACIÓN) ─────
-        # Se envía confirmación al usuario con su número de radicado
 
         # ── CONSTRUCCIÓN DE RESPUESTA ESTANDARIZADA (201 Created) ───────
-        data_response = CasoSoporteData(
-            id_caso=registro["id_caso"],
-            numero_radicado=registro["numero_radicado"],
-            id_usuario=registro["id_usuario"],
-            tipo_caso=registro["tipo_caso"],
-            estado=registro["estado"],
-            fecha_radicacion=registro["fecha_radicacion"]
+        response_data = SupportCaseData(
+            id_caso=record["id_caso"],
+            numero_radicado=record["numero_radicado"],
+            id_usuario=record["id_usuario"],
+            tipo_caso=record["tipo_caso"],
+            estado=record["estado"],
+            fecha_radicacion=record["fecha_radicacion"],
         )
 
-        return CasoSoporteResponse(
+        return SupportCaseResponse(
             mensaje="Caso de soporte radicado exitosamente",
-            data=data_response,
-            success=True
+            data=response_data,
+            success=True,
         )

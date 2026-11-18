@@ -1,30 +1,32 @@
 from datetime import date
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-TIPOS_DOCUMENTO_VIAJE_VALIDOS = {"PA", "CC", "CE", "TI"}
-PAISES_EMISION_VALIDOS = {"CO", "MX", "PE", "AR", "CL", "ES", "US"}
+VALID_TRAVEL_DOCUMENT_TYPES = {"PA", "CC", "CE", "TI"}
+VALID_ISSUING_COUNTRIES = {"CO", "MX", "PE", "AR", "CL", "ES", "US"}
 
 
-class DocumentoViajeCreate(BaseModel):
-    tipo_documento: str
-    numero_documento: str = Field(..., min_length=4, max_length=25)
-    pais_emision: str
-    fecha_vencimiento: date
-    es_documento_principal: bool = Field(default=False)
+class TravelDocumentCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
 
-    @field_validator("tipo_documento", "pais_emision")
+    document_type: str = Field(..., alias="tipo_documento")
+    document_number: str = Field(..., alias="numero_documento", min_length=4, max_length=25)
+    issuing_country: str = Field(..., alias="pais_emision")
+    expiration_date: date = Field(..., alias="fecha_vencimiento")
+    is_primary_document: bool = Field(default=False, alias="es_documento_principal")
+
+    @field_validator("document_type", "issuing_country")
     @classmethod
-    def normalizar_codigo(cls, v: str) -> str:
-        return v.strip().upper()
+    def normalize_code(cls, value: str) -> str:
+        return value.strip().upper()
 
-    @field_validator("numero_documento")
+    @field_validator("document_number")
     @classmethod
-    def normalizar_numero(cls, v: str) -> str:
-        return v.strip().upper()
+    def normalize_number(cls, value: str) -> str:
+        return value.strip().upper()
 
 
-class DocumentoViajeDataOut(BaseModel):
+class TravelDocumentDataOut(BaseModel):
     id_documento: int
     id_usuario: int
     tipo_documento: str
@@ -35,45 +37,44 @@ class DocumentoViajeDataOut(BaseModel):
     estado: str
 
 
-class RegistroDocumentoViajeOut(BaseModel):
+class TravelDocumentRegistrationOut(BaseModel):
     mensaje: str
-    data: Optional[DocumentoViajeDataOut] = None
+    data: Optional[TravelDocumentDataOut] = None
     success: bool
 
 
-class DocumentoViaje:
+class TravelDocument:
     def __init__(
         self,
-        id_documento: int,
-        id_usuario: int,
-        tipo_documento: str,
-        numero_documento: str,
-        pais_emision: str,
-        fecha_vencimiento: date,
-        es_documento_principal: bool = False,
-        estado: str = "ACTIVO",
+        document_id: int,
+        user_id: int,
+        document_type: str,
+        document_number: str,
+        issuing_country: str,
+        expiration_date: date,
+        is_primary_document: bool = False,
+        status: str = "ACTIVO",
     ):
-        self.id_documento = id_documento
-        self.id_usuario = id_usuario
-        self.tipo_documento = tipo_documento
-        self.numero_documento = numero_documento
-        self.pais_emision = pais_emision
-        self.fecha_vencimiento = fecha_vencimiento
-        self.es_documento_principal = es_documento_principal
-        self.estado = estado
+        self.document_id = document_id
+        self.user_id = user_id
+        self.document_type = document_type
+        self.document_number = document_number
+        self.issuing_country = issuing_country
+        self.expiration_date = expiration_date
+        self.is_primary_document = is_primary_document
+        self.status = status
 
-    def esta_activo(self) -> bool:
-        return self.estado == "ACTIVO"
+    def is_active(self) -> bool:
+        return self.status == "ACTIVO"
 
     def to_response(self) -> dict:
         return {
-            "id_documento": self.id_documento,
-            "id_usuario": self.id_usuario,
-            "tipo_documento": self.tipo_documento,
-            "numero_documento": self.numero_documento,
-            "pais_emision": self.pais_emision,
-            "fecha_vencimiento": self.fecha_vencimiento,
-            "es_documento_principal": self.es_documento_principal,
-            "estado": self.estado,
+            "id_documento": self.document_id,
+            "id_usuario": self.user_id,
+            "tipo_documento": self.document_type,
+            "numero_documento": self.document_number,
+            "pais_emision": self.issuing_country,
+            "fecha_vencimiento": self.expiration_date,
+            "es_documento_principal": self.is_primary_document,
+            "estado": self.status,
         }
-    

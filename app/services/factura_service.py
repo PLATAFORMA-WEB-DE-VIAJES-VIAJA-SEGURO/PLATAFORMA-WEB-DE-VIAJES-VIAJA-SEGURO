@@ -1,90 +1,90 @@
 import re
 from app.domain.factura import (
-    FacturaResponse,
-    FacturaData,
-    ReglaNegocioRN48Exception,
-    DatosFiscalesInvalidosException
+    InvoiceResponse,
+    InvoiceData,
+    BusinessRuleRN48Exception,
+    InvalidTaxDataException,
 )
-from app.repositories.factura_repository import FacturaRepository
-from app.repositories.transaccion_repository import TransaccionRepository
+from app.repositories.factura_repository import InvoiceRepository
+from app.repositories.transaccion_repository import TransactionRepository
 
 
-class FacturaService:
-    def __init__(self, repo_factura: FacturaRepository, repo_transaccion: TransaccionRepository):
-        self.repo_factura = repo_factura
-        self.repo_transaccion = repo_transaccion
+class InvoiceService:
+    def __init__(self, invoice_repo: InvoiceRepository, transaction_repo: TransactionRepository):
+        self.invoice_repo = invoice_repo
+        self.transaction_repo = transaction_repo
 
-    def emitir_factura(
+    def issue_invoice(
         self,
-        id_transaccion: int,
-        tipo_documento_fiscal: str,
-        numero_documento_fiscal: str,
-        razon_social: str,
-        correo_facturacion: str
-    ) -> FacturaResponse:
+        transaction_id: int,
+        tax_document_type: str,
+        tax_document_number: str,
+        company_name: str,
+        billing_email: str,
+    ) -> InvoiceResponse:
 
         # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
-        tipo_doc = (tipo_documento_fiscal or "").strip().upper()
-        numero_doc = (numero_documento_fiscal or "").strip()
-        razon = (razon_social or "").strip()
-        correo = (correo_facturacion or "").strip().lower()
+        doc_type = (tax_document_type or "").strip().upper()
+        doc_number = (tax_document_number or "").strip()
+        company = (company_name or "").strip()
+        email = (billing_email or "").strip().lower()
 
-        if not tipo_doc or not numero_doc or not razon or not correo:
-            raise DatosFiscalesInvalidosException("Datos fiscales del adquirente incompletos")
+        if not doc_type or not doc_number or not company or not email:
+            raise InvalidTaxDataException("Datos fiscales del adquirente incompletos")
 
         # Validar formato básico del correo
-        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", correo):
-            raise DatosFiscalesInvalidosException("Datos fiscales del adquirente incompletos")
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            raise InvalidTaxDataException("Datos fiscales del adquirente incompletos")
 
         # ── REGLA DE NEGOCIO RN-48 (409 Conflict) ──────────────────────
         # 1. Verificar que la transacción exista y esté en estado APROBADO
-        transaccion = self.repo_factura.obtener_transaccion(
-            id_transaccion=id_transaccion,
-            transacciones_en_memoria=self.repo_transaccion._transacciones
+        transaction = self.invoice_repo.get_transaction(
+            transaction_id=transaction_id,
+            memory_transactions=self.transaction_repo._transactions,
         )
 
-        if transaccion is None or transaccion.get("estado_transaccion") != "APROBADO":
-            raise ReglaNegocioRN48Exception(
+        if transaction is None or transaction.get("estado_transaccion") != "APROBADO":
+            raise BusinessRuleRN48Exception(
                 "La transacción no está aprobada o ya cuenta con una factura emitida"
             )
 
         # 2. Verificar que no exista una factura previa para esta transacción
-        if self.repo_factura.verificar_transaccion_facturada(id_transaccion):
-            raise ReglaNegocioRN48Exception(
+        if self.invoice_repo.is_transaction_invoiced(transaction_id):
+            raise BusinessRuleRN48Exception(
                 "La transacción no está aprobada o ya cuenta con una factura emitida"
             )
 
         # ── EMISIÓN VÍA AEX-05 ─────────────────────────────────────────
-        total = transaccion["monto_cobrado"]
+        total = transaction["monto_cobrado"]
 
-        registro = self.repo_factura.emitir_factura_aex05(
-            id_transaccion=id_transaccion,
+        record = self.invoice_repo.issue_invoice_aex05(
+            transaction_id=transaction_id,
             total=total,
-            tipo_documento_fiscal=tipo_doc,
-            numero_documento_fiscal=numero_doc,
-            razon_social=razon,
-            correo_facturacion=correo
+            tax_document_type=doc_type,
+            tax_document_number=doc_number,
+            company_name=company,
+            billing_email=email,
         )
 
         # ── NOTIFICACIÓN VÍA AIN-17 ────────────────────────────────────
-        self.repo_factura.notificar_factura_ain17(
-            correo=correo,
-            numero_factura=registro["numero_factura"],
-            id_transaccion=id_transaccion
+        self.invoice_repo.notify_invoice_ain17(
+            email=email,
+            invoice_number=record["numero_factura"],
+            transaction_id=transaction_id,
         )
 
         # ── RESPUESTA ESTANDARIZADA (201 Created) ──────────────────────
-        data = FacturaData(
-            id_factura=registro["id_factura"],
-            numero_factura=registro["numero_factura"],
-            id_transaccion=registro["id_transaccion"],
-            cufe=registro["cufe"],
-            total_facturado=registro["total_facturado"],
-            estado_dian=registro["estado_dian"]
+        response_data = InvoiceData(
+            id_factura=record["id_factura"],
+            numero_factura=record["numero_factura"],
+            id_transaccion=record["id_transaccion"],
+            cufe=record["cufe"],
+            total_facturado=record["total_facturado"],
+            estado_dian=record["estado_dian"],
         )
 
-        return FacturaResponse(
+        return InvoiceResponse(
             mensaje="Factura electrónica emitida exitosamente",
-            data=data,
-            success=True
+            data=response_data,
+            success=True,
         )
