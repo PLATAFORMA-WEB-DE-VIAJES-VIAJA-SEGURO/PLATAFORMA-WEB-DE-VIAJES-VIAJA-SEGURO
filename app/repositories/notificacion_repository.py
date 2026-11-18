@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
-from app.domain.notificacion import ProveedorNoDisponibleException
+from typing import Dict, Any, List
+from app.domain.notificacion import MessagingProviderUnavailableException
 
-class NotificacionRepository:
+
+class NotificationRepository:
     """
     Repositorio que gestiona la persistencia de notificaciones y la
     interacción simulada con el catálogo AIN-07 y el proveedor externo AEX-06.
@@ -10,68 +11,69 @@ class NotificacionRepository:
 
     def __init__(self):
         # Almacén de notificaciones despachadas
-        self._notificaciones: List[Dict[str, Any]] = []
+        self._notifications: List[Dict[str, Any]] = []
         # Secuencia de ID según criterio de HU-055 (ej: 55001)
-        self._siguiente_id = 55001
+        self._next_id = 55001
 
         # Catálogo AIN-07: Plantillas autorizadas y activas
-        self._plantillas_activas = {
+        self._active_templates = {
             "CONFIRMACION_RESERVA",
             "ACTUALIZACION_CASO",
             "CANCELACION_RESERVA",
             "RECORDATORIO_PAGO",
-            "BIENVENIDA"
+            "BIENVENIDA",
         }
 
         # Catálogo AIN-07: Destinatarios con bloqueos o superación de reintentos (RN-55)
-        self._destinatarios_bloqueados = {
+        self._blocked_recipients = {
             "bloqueado@email.com",
             "+570000000000",
-            "spam@email.com"
+            "spam@email.com",
         }
 
         # Interruptor de simulación de fallo del proveedor AEX-06 (para pruebas de 503)
-        self.simular_falla_proveedor = False
+        self.simulate_provider_failure = False
 
-    def es_plantilla_activa(self, plantilla: str) -> bool:
+    def is_template_active(self, template: str) -> bool:
         """Valida contra el catálogo AIN-07 si la plantilla está activa."""
-        return plantilla.strip().upper() in self._plantillas_activas
+        return template.strip().upper() in self._active_templates
 
-    def esta_bloqueado(self, destinatario: str) -> bool:
+    def is_recipient_blocked(self, recipient: str) -> bool:
         """Verifica si el destinatario ha bloqueado notificaciones o superó reintentos."""
-        return destinatario.strip().lower() in {d.lower() for d in self._destinatarios_bloqueados}
+        return recipient.strip().lower() in {item.lower() for item in self._blocked_recipients}
 
-    def despachar_aex06(
+    def dispatch_aex06(
         self,
-        id_usuario: int,
-        canal: str,
-        destinatario: str,
-        plantilla: str,
-        variables: Dict[str, Any]
+        user_id: int,
+        channel: str,
+        recipient: str,
+        template: str,
+        variables: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
         Transmite la notificación al proveedor externo AEX-06 y registra la entrega.
         """
-        if self.simular_falla_proveedor or destinatario.lower() == "fallo_proveedor@email.com":
-            raise ProveedorNoDisponibleException("El proveedor externo de mensajería no responde en este momento")
+        if self.simulate_provider_failure or recipient.lower() == "fallo_proveedor@email.com":
+            raise MessagingProviderUnavailableException("El proveedor externo de mensajería no responde en este momento")
 
-        fecha_actual_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        current_iso_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        registro = {
-            "id_notificacion": self._siguiente_id,
-            "id_usuario": id_usuario,
-            "canal": canal,
-            "destinatario": destinatario,
-            "plantilla": plantilla,
+        record = {
+            "id_notificacion": self._next_id,
+            "id_usuario": user_id,
+            "canal": channel,
+            "destinatario": recipient,
+            "plantilla": template,
             "variables": variables,
             "estado_envio": "ENVIADO",
-            "fecha_envio": fecha_actual_iso
+            "fecha_envio": current_iso_date,
         }
 
-        self._notificaciones.append(registro)
-        self._siguiente_id += 1
+        self._notifications.append(record)
+        self._next_id += 1
 
-        return registro
+        return record
+
 
 # Instancia singleton para inyección en el servicio
-notificacion_repository = NotificacionRepository()
+notification_repository = NotificationRepository()

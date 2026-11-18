@@ -2,127 +2,127 @@ import os
 from datetime import date
 from typing import List, Optional
 from dotenv import load_dotenv
-from app.domain.hotel import Hotel, BloqueoHabitacion
+from app.domain.hotel import Hotel, RoomLock
 
 
-def _verificar_disponibilidad_hoteles(valor_control: str = "") -> None:
+def _check_hotel_availability(control_value: str = "") -> None:
     load_dotenv(override=True)
-    falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
-    if falla_env or valor_control.strip().upper() in {"503", "HT-503"}:
+    simulate_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
+    if simulate_failure or control_value.strip().upper() in {"503", "HT-503"}:
         raise RuntimeError("Fallo de conexión con el proveedor externo AEX-02 (Servicio de oferta hotelera)")
 
 
 class HotelRepository:
     def __init__(self):
-        self._hoteles: List[Hotel] = []
-        self._bloqueos: List[BloqueoHabitacion] = []
+        self._hotels: List[Hotel] = []
+        self._locks: List[RoomLock] = []
         self._seed()
 
     def _seed(self):
-        self._hoteles = [
+        self._hotels = [
             Hotel(
-                id_hotel="HT-201",
-                nombre="Hotel Caribe Histórico",
-                municipio="CTG",
-                categoria="5_ESTRELLAS",
-                direccion="Cra. 1 # 2-87, Bocagrande",
-                calificacion=4.8,
-                habitaciones_disponibles=10,
-                precio_minimo_noche=450000.0,
-                moneda="COP",
+                hotel_id="HT-201",
+                name="Hotel Caribe Histórico",
+                municipality="CTG",
+                category="5_ESTRELLAS",
+                address="Cra. 1 # 2-87, Bocagrande",
+                rating=4.8,
+                available_rooms=10,
+                min_price_per_night=450000.0,
+                currency="COP",
             ),
             Hotel(
-                id_hotel="HT-202",
-                nombre="Hotel Muralla Boutique",
-                municipio="CTG",
-                categoria="BOUTIQUE",
-                direccion="Calle de la Factoría # 36-57",
-                calificacion=4.7,
-                habitaciones_disponibles=4,
-                precio_minimo_noche=380000.0,
-                moneda="COP",
+                hotel_id="HT-202",
+                name="Hotel Muralla Boutique",
+                municipality="CTG",
+                category="BOUTIQUE",
+                address="Calle de la Factoría # 36-57",
+                rating=4.7,
+                available_rooms=4,
+                min_price_per_night=380000.0,
+                currency="COP",
             ),
             Hotel(
-                id_hotel="HT-203",
-                nombre="Hotel Capital Ejecutivo",
-                municipio="BOG",
-                categoria="4_ESTRELLAS",
-                direccion="Av. Calle 26 # 69-76",
-                calificacion=4.5,
-                habitaciones_disponibles=15,
-                precio_minimo_noche=290000.0,
-                moneda="COP",
+                hotel_id="HT-203",
+                name="Hotel Capital Ejecutivo",
+                municipality="BOG",
+                category="4_ESTRELLAS",
+                address="Av. Calle 26 # 69-76",
+                rating=4.5,
+                available_rooms=15,
+                min_price_per_night=290000.0,
+                currency="COP",
             ),
             Hotel(
-                id_hotel="HT-204",
-                nombre="Hotel Costa Sol",
-                municipio="MIA",
-                categoria="4_ESTRELLAS",
-                direccion="1200 Ocean Drive, Miami Beach",
-                calificacion=4.6,
-                habitaciones_disponibles=0,
-                precio_minimo_noche=680000.0,
-                moneda="COP",
+                hotel_id="HT-204",
+                name="Hotel Costa Sol",
+                municipality="MIA",
+                category="4_ESTRELLAS",
+                address="1200 Ocean Drive, Miami Beach",
+                rating=4.6,
+                available_rooms=0,
+                min_price_per_night=680000.0,
+                currency="COP",
             ),
         ]
 
     # HU-017: Buscar hoteles disponibles en AEX-02
-    def buscar_hoteles(
+    def search_hotels(
         self,
-        municipio: str,
-        huespedes: int,
-        categoria: Optional[str] = None,
+        municipality: str,
+        guests: int,
+        category: Optional[str] = None,
     ) -> List[Hotel]:
-        _verificar_disponibilidad_hoteles(municipio)
-        habitaciones_necesarias = (huespedes + 1) // 2
+        _check_hotel_availability(municipality)
+        required_rooms = (guests + 1) // 2
         return [
-            h for h in self._hoteles
-            if h.activo
-            and h.municipio == municipio
-            and h.habitaciones_disponibles >= habitaciones_necesarias
-            and (categoria is None or h.categoria == categoria)
+            hotel for hotel in self._hotels
+            if hotel.active
+            and hotel.municipality == municipality
+            and hotel.available_rooms >= required_rooms
+            and (category is None or hotel.category == category)
         ]
 
     # HU-019 y HU-021: Obtener hotel por ID
-    def obtener_por_id(self, id_hotel: str) -> Optional[Hotel]:
-        _verificar_disponibilidad_hoteles(id_hotel)
+    def get_by_id(self, hotel_id: str) -> Optional[Hotel]:
+        _check_hotel_availability(hotel_id)
         return next(
-            (h for h in self._hoteles if h.id_hotel == id_hotel.strip().upper() and h.activo),
+            (hotel for hotel in self._hotels if hotel.hotel_id == hotel_id.strip().upper() and hotel.active),
             None,
         )
 
     # HU-021: Registrar bloqueo temporal de habitación en AEX-02
-    def registrar_bloqueo(
+    def register_lock(
         self,
         hotel: Hotel,
-        tipo_habitacion: str,
-        fecha_entrada: date,
-        fecha_salida: date,
-        noches: int,
-        cantidad_habitaciones: int,
-        huespedes: int,
-        id_usuario: int,
-        total_retenido: float,
-        minutos_bloqueo: int,
-    ) -> BloqueoHabitacion:
-        _verificar_disponibilidad_hoteles(hotel.id_hotel)
-        hotel.habitaciones_disponibles -= cantidad_habitaciones
-        consecutivo = 500 + len(self._bloqueos) + 1
-        bloqueo = BloqueoHabitacion(
-            codigo_bloqueo=f"BLQ-HT-{consecutivo}",
+        room_type: str,
+        check_in_date: date,
+        check_out_date: date,
+        nights: int,
+        room_count: int,
+        guests: int,
+        user_id: int,
+        retained_total: float,
+        lock_minutes: int,
+    ) -> RoomLock:
+        _check_hotel_availability(hotel.hotel_id)
+        hotel.available_rooms -= room_count
+        sequence = 500 + len(self._locks) + 1
+        lock = RoomLock(
+            lock_code=f"BLQ-HT-{sequence}",
             hotel=hotel,
-            tipo_habitacion=tipo_habitacion,
-            fecha_entrada=fecha_entrada,
-            fecha_salida=fecha_salida,
-            noches=noches,
-            cantidad_habitaciones=cantidad_habitaciones,
-            huespedes=huespedes,
-            id_usuario=id_usuario,
-            total_retenido=total_retenido,
-            minutos_bloqueo=minutos_bloqueo,
+            room_type=room_type,
+            check_in_date=check_in_date,
+            check_out_date=check_out_date,
+            nights=nights,
+            room_count=room_count,
+            guests=guests,
+            user_id=user_id,
+            retained_total=retained_total,
+            lock_minutes=lock_minutes,
         )
-        self._bloqueos.append(bloqueo)
-        return bloqueo
+        self._locks.append(lock)
+        return lock
 
 
 hotel_repository = HotelRepository()

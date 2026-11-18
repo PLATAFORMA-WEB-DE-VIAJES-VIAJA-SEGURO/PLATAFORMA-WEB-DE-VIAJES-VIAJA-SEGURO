@@ -2,47 +2,47 @@ from typing import List
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from app.domain.usuario import (
-    UsuarioCreate,
-    UsuarioDataOut,
-    RegistroUsuarioOut,
-    UsuarioLogin,
-    LoginUsuarioOut,
+    UserCreate,
+    UserDataOut,
+    UserRegistrationOut,
+    UserLogin,
+    UserLoginOut,
 )
 from app.services.usuario_service import (
-    UsuarioService,
-    ErrorCatalogoInvalido,
-    ErrorCorreoDuplicado,
-    ErrorCredencialesInvalidas,
+    UserService,
+    InvalidCatalogError,
+    DuplicateEmailError,
+    InvalidCredentialsError,
 )
-from app.repositories.usuario_repository import usuario_repository
+from app.repositories.usuario_repository import user_repository
 
 router = APIRouter(
     prefix="/api/v1/usuarios",
     tags=["Usuarios"],
 )
 
-service = UsuarioService(repo=usuario_repository)
+service = UserService(repo=user_repository)
 
 
 @router.post(
     "/registro",
-    response_model=RegistroUsuarioOut,
+    response_model=UserRegistrationOut,
     status_code=status.HTTP_201_CREATED,
     summary="Registrar usuario",
     description="Crea una cuenta nueva validando catálogos y que el correo no esté registrado en otra cuenta activa.",
 )
-def registrar_usuario(datos: UsuarioCreate):
+def register_user(payload: UserCreate):
     try:
-        return service.registrar_usuario(datos)
-    except ErrorCatalogoInvalido as e:
+        return service.register_user(payload)
+    except InvalidCatalogError as exc:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
-    except ErrorCorreoDuplicado as e:
+    except DuplicateEmailError as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -57,18 +57,18 @@ def registrar_usuario(datos: UsuarioCreate):
 
 @router.post(
     "/login",
-    response_model=LoginUsuarioOut,
+    response_model=UserLoginOut,
     status_code=status.HTTP_200_OK,
     summary="Iniciar sesión",
     description="Autentica al usuario verificando que la cuenta esté activa (RN-02) y retorna un token de sesión.",
 )
-def iniciar_sesion(datos: UsuarioLogin):
+def login_user(payload: UserLogin):
     try:
-        return service.iniciar_sesion(datos)
-    except ErrorCredencialesInvalidas as e:
+        return service.login_user(payload)
+    except InvalidCredentialsError as exc:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"mensaje": str(e), "data": None, "success": False},
+            content={"mensaje": str(exc), "data": None, "success": False},
         )
     except Exception:
         return JSONResponse(
@@ -83,9 +83,9 @@ def iniciar_sesion(datos: UsuarioLogin):
 
 @router.get(
     "/",
-    response_model=List[UsuarioDataOut],
+    response_model=List[UserDataOut],
     status_code=status.HTTP_200_OK,
     summary="Listar usuarios activos",
 )
-def listar_usuarios():
-    return service.listar_usuarios()
+def list_users():
+    return service.list_users()

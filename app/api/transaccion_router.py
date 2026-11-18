@@ -3,27 +3,27 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from app.domain.transaccion import (
-    TransaccionCreate,
-    TransaccionResponse,
-    ReglaNegocioRN47Exception,
-    DatosPagoInvalidosException,
-    PasarelaNoDisponibleException
+    TransactionCreate,
+    TransactionResponse,
+    BusinessRuleRN47Exception,
+    InvalidPaymentDataException,
+    ExternalGatewayUnavailableException,
 )
-from app.services.transaccion_service import TransaccionService
-from app.repositories.transaccion_repository import transaccion_repository
+from app.services.transaccion_service import TransactionService
+from app.repositories.transaccion_repository import transaction_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",
-    tags=["Pagos"]
+    tags=["Pagos"],
 )
 
-servicio = TransaccionService(repo=transaccion_repository)
+service = TransactionService(repo=transaction_repository)
 
 # Documentación OpenAPI para Swagger UI (/docs)
-RESPUESTAS_OPENAPI_TRANSACCION = {
+OPENAPI_TRANSACTION_RESPONSES = {
     201: {
         "description": "Cobro aprobado y reserva confirmada exitosamente",
-        "model": TransaccionResponse,
+        "model": TransactionResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -35,12 +35,12 @@ RESPUESTAS_OPENAPI_TRANSACCION = {
                         "monto_cobrado": 3000000.0,
                         "moneda": "COP",
                         "estado_transaccion": "APROBADO",
-                        "estado_reserva": "CONFIRMADA"
+                        "estado_reserva": "CONFIRMADA",
                     },
-                    "success": True
+                    "success": True,
                 }
             }
-        }
+        },
     },
     400: {
         "description": "Datos de pago incompletos o token de tarjeta inválido",
@@ -49,10 +49,10 @@ RESPUESTAS_OPENAPI_TRANSACCION = {
                 "example": {
                     "mensaje": "Datos de pago incompletos o token de tarjeta inválido",
                     "data": None,
-                    "success": False
+                    "success": False,
                 }
             }
-        }
+        },
     },
     409: {
         "description": "Error por Regla de Negocio RN-47 (Discrepancia en monto liquidado AIN-15a o rechazo de pasarela)",
@@ -61,10 +61,10 @@ RESPUESTAS_OPENAPI_TRANSACCION = {
                 "example": {
                     "mensaje": "El monto enviado no coincide con el saldo de la reserva o la transacción fue rechazada",
                     "data": None,
-                    "success": False
+                    "success": False,
                 }
             }
-        }
+        },
     },
     503: {
         "description": "Falla de Disponibilidad (La pasarela de pagos externa AEX-04 no responde)",
@@ -73,74 +73,74 @@ RESPUESTAS_OPENAPI_TRANSACCION = {
                 "example": {
                     "mensaje": "La pasarela de pagos externa no responde en este momento",
                     "data": None,
-                    "success": False
+                    "success": False,
                 }
             }
-        }
-    }
+        },
+    },
 }
+
 
 @router.post(
     "/transacciones",
-    response_model=TransaccionResponse,
+    response_model=TransactionResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=RESPUESTAS_OPENAPI_TRANSACCION,
+    responses=OPENAPI_TRANSACTION_RESPONSES,
     summary="Procesar cobro de reserva (HU-047)",
-    description="Ejecuta la transacción de cobro financiero ante la pasarela AEX-04 validando el monto exacto en AIN-15a (RN-47)."
+    description="Ejecuta la transacción de cobro financiero ante la pasarela AEX-04 validando el monto exacto en AIN-15a (RN-47).",
 )
-def procesar_cobro(datos: TransaccionCreate):
+def process_charge(payload: TransactionCreate):
     # Recargar variables de entorno dinámicamente
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
 
     # Caso 4 de pruebas: Simulación de fallo de disponibilidad en pasarela AEX-04 (503 Service Unavailable)
-    es_simulacion_falla = (
-        (datos.codigo_reserva and datos.codigo_reserva.strip().upper() == "VS-2026-503")
-        or (datos.token_tarjeta and datos.token_tarjeta.strip().lower() in ("tok_503", "tok_falla"))
+    is_simulated_failure = (
+        (payload.reservation_code and payload.reservation_code.strip().upper() == "VS-2026-503")
+        or (payload.card_token and payload.card_token.strip().lower() in ("tok_503", "tok_falla"))
     )
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "La pasarela de pagos externa no responde en este momento",
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
 
     try:
-        resultado = servicio.procesar_cobro(datos)
-        return resultado
-    except ReglaNegocioRN47Exception as e:
+        return service.process_charge(payload)
+    except BusinessRuleRN47Exception as exc:
         # Caso 2: Error por Regla de Negocio RN-47 -> 409 Conflict
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
-                "mensaje": str(e),
+                "mensaje": str(exc),
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
-    except DatosPagoInvalidosException as e:
+    except InvalidPaymentDataException as exc:
         # Caso 3: Error de Validación o Parámetros -> 400 Bad Request
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
-                "mensaje": str(e),
+                "mensaje": str(exc),
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
-    except PasarelaNoDisponibleException as e:
+    except ExternalGatewayUnavailableException as exc:
         # Caso 4: Falla de Disponibilidad AEX-04 -> 503 Service Unavailable
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
-                "mensaje": str(e),
+                "mensaje": str(exc),
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
     except Exception:
         # Fallos internos imprevistos ocultando trazas técnicas -> 503
@@ -149,6 +149,6 @@ def procesar_cobro(datos: TransaccionCreate):
             content={
                 "mensaje": "La pasarela de pagos externa no responde en este momento",
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )

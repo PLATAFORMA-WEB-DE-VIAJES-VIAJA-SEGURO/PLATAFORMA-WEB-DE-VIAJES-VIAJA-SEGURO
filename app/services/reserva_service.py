@@ -1,46 +1,46 @@
 import re
 from typing import Optional
 from app.domain.reserva import (
-    ItemCarritoCreate,
-    ItemCarritoData,
-    ItemCarritoResponse,
-    ReglaNegocioRN33Exception,
-    DatosItemCarritoInvalidosException,
-    DetalleItemCarrito,
-    ConsultaCarritoData,
-    ConsultaCarritoResponse,
-    ReglaNegocioRN35Exception,
-    UsuarioCarritoInvalidoException,
-    CalculoTotalData,
-    CalculoTotalResponse,
-    ReglaNegocioRN37Exception,
-    CarritoNoIdentificadoException,
-    CierreCarritoCreate,
-    CierreCarritoData,
-    CierreCarritoResponse,
-    ReglaNegocioRN38Exception,
-    DatosCierreCompraInvalidosException,
-    ReservaCreate,
-    ReservaData,
-    ReservaResponse,
-    ReglaNegocioRN39Exception,
-    DatosReservaInvalidosException,
-    RegistrarViajerosCreate,
-    RegistrarViajerosData,
-    RegistrarViajerosResponse,
-    ReglaNegocioRN40Exception,
-    DatosViajerosInvalidosException,
-    CancelarReservaCreate,
-    CancelarReservaData,
-    CancelarReservaResponse,
-    ReglaNegocioRN43Exception,
-    MotivoCancelacionInvalidoException,
+    CartItemCreate,
+    CartItemData,
+    CartItemResponse,
+    BusinessRuleRN33Exception,
+    InvalidCartItemDataException,
+    CartItemDetail,
+    CartQueryData,
+    CartQueryResponse,
+    BusinessRuleRN35Exception,
+    InvalidCartUserException,
+    TotalCalculationData,
+    TotalCalculationResponse,
+    BusinessRuleRN37Exception,
+    UnidentifiedCartException,
+    CartCheckoutCreate,
+    CartCheckoutData,
+    CartCheckoutResponse,
+    BusinessRuleRN38Exception,
+    InvalidCheckoutDataException,
+    ReservationCreate,
+    ReservationData,
+    ReservationResponse,
+    BusinessRuleRN39Exception,
+    InvalidReservationDataException,
+    RegisterTravelersCreate,
+    RegisterTravelersData,
+    RegisterTravelersResponse,
+    BusinessRuleRN40Exception,
+    InvalidTravelersDataException,
+    CancelReservationCreate,
+    CancelReservationData,
+    CancelReservationResponse,
+    BusinessRuleRN43Exception,
+    InvalidCancellationReasonException,
 )
-from app.repositories.reserva_repository import ReservaRepository
+from app.repositories.reserva_repository import ReservationRepository
 
-TIPOS_SERVICIO_PERMITIDOS = {"VUELO", "HOTEL", "PAQUETE", "ACTIVIDAD"}
+ALLOWED_SERVICE_TYPES = {"VUELO", "HOTEL", "PAQUETE", "ACTIVIDAD"}
 
-MEDIOS_PAGO_PERMITIDOS = {
+ALLOWED_PAYMENT_METHODS = {
     "TARJETA_CREDITO",
     "TARJETA_DEBITO",
     "PSE",
@@ -49,54 +49,54 @@ MEDIOS_PAGO_PERMITIDOS = {
     "PAYPAL",
 }
 
-MONEDAS_PERMITIDAS = {"COP", "USD", "EUR"}
+ALLOWED_CURRENCIES = {"COP", "USD", "EUR"}
 
 
-class ReservaService:
-    def __init__(self, repo: ReservaRepository):
+class ReservationService:
+    def __init__(self, repo: ReservationRepository):
         self.repo = repo
 
     # ── HU-033: Agregar ítem al carrito ─────────────────────────────
-    def agregar_item_carrito(self, datos: ItemCarritoCreate) -> ItemCarritoResponse:
-        tipo_servicio = (datos.tipo_servicio or "").strip().upper()
-        ref_bloqueo = (datos.id_referencia_bloqueo or "").strip().upper()
-        descripcion = (datos.descripcion or "").strip()
+    def add_cart_item(self, data: CartItemCreate) -> CartItemResponse:
+        service_type = (data.service_type or "").strip().upper()
+        lock_ref = (data.lock_reference_id or "").strip().upper()
+        description = (data.description or "").strip()
 
         # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
         if (
-            tipo_servicio not in TIPOS_SERVICIO_PERMITIDOS
-            or datos.cantidad <= 0
-            or datos.precio_unitario <= 0
-            or not ref_bloqueo.startswith("BLK-")
+            service_type not in ALLOWED_SERVICE_TYPES
+            or data.quantity <= 0
+            or data.unit_price <= 0
+            or not lock_ref.startswith("BLK-")
         ):
-            raise DatosItemCarritoInvalidosException(
+            raise InvalidCartItemDataException(
                 "El tipo de servicio, cantidad o referencia de bloqueo no son válidos"
             )
 
         # ── REGLA DE NEGOCIO RN-33 (409 Conflict) ──────────────────────
         # 1. Verificar que el bloqueo temporal siga vigente (AIN-09, AIN-10, AIN-13)
-        if not self.repo.verificar_bloqueo_servicio_vigente(ref_bloqueo):
-            raise ReglaNegocioRN33Exception(
+        if not self.repo.is_service_lock_valid(lock_ref):
+            raise BusinessRuleRN33Exception(
                 "El bloqueo temporal del servicio ha expirado o el ítem ya está en el carrito"
             )
 
         # 2. Verificar que el mismo bloqueo no haya sido agregado ya al carrito
-        if self.repo.verificar_bloqueo_duplicado_en_carrito(ref_bloqueo):
-            raise ReglaNegocioRN33Exception(
+        if self.repo.is_lock_duplicated_in_cart(lock_ref):
+            raise BusinessRuleRN33Exception(
                 "El bloqueo temporal del servicio ha expirado o el ítem ya está en el carrito"
             )
 
         # ── REGISTRO DEL ÍTEM EN EL CARRITO (201 Created) ──────────────
-        item = self.repo.agregar_item_al_carrito(
-            id_usuario=datos.id_usuario,
-            tipo_servicio=tipo_servicio,
-            id_referencia_bloqueo=ref_bloqueo,
-            descripcion=descripcion,
-            cantidad=datos.cantidad,
-            precio_unitario=datos.precio_unitario,
+        item = self.repo.add_item_to_cart(
+            user_id=data.user_id,
+            service_type=service_type,
+            lock_reference_id=lock_ref,
+            description=description,
+            quantity=data.quantity,
+            unit_price=data.unit_price,
         )
 
-        data = ItemCarritoData(
+        response_data = CartItemData(
             id_carrito=item["id_carrito"],
             id_item=item["id_item"],
             tipo_servicio=item["tipo_servicio"],
@@ -106,342 +106,342 @@ class ReservaService:
             total_items_carrito=item["total_items_carrito"],
         )
 
-        return ItemCarritoResponse(
+        return CartItemResponse(
             mensaje="Ítem agregado al carrito exitosamente",
-            data=data,
+            data=response_data,
             success=True,
         )
 
     # ── HU-035: Consultar carrito ───────────────────────────────────
-    def consultar_carrito(self, id_usuario: Optional[int]) -> ConsultaCarritoResponse:
+    def get_cart(self, user_id: Optional[int]) -> CartQueryResponse:
         # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
-        if id_usuario is None or id_usuario <= 0:
-            raise UsuarioCarritoInvalidoException(
+        if user_id is None or user_id <= 0:
+            raise InvalidCartUserException(
                 "Identificador de usuario inválido o faltante"
             )
 
-        carrito = self.repo.obtener_carrito_por_usuario(id_usuario)
-        if not carrito:
-            raise UsuarioCarritoInvalidoException(
+        cart = self.repo.get_cart_by_user(user_id)
+        if not cart:
+            raise InvalidCartUserException(
                 "Identificador de usuario inválido o faltante"
             )
 
         # ── REGLA DE NEGOCIO RN-35 (409 Conflict) ──────────────────────
         # Verificar que ningún bloqueo temporal del carrito haya expirado
-        if not carrito.get("bloqueos_vigentes", False):
-            raise ReglaNegocioRN35Exception(
+        if not cart.get("bloqueos_vigentes", False):
+            raise BusinessRuleRN35Exception(
                 "El carrito contiene ítems cuyos bloqueos temporales han expirado"
             )
 
         # ── CONSTRUCCIÓN DE RESPUESTA ESTANDARIZADA (200 OK) ────────────
-        items_raw = carrito.get("items_consulta", [])
+        raw_items = cart.get("items_consulta", [])
         items = [
-            DetalleItemCarrito(
+            CartItemDetail(
                 id_item=item["id_item"],
                 tipo_servicio=item["tipo_servicio"],
                 descripcion=item["descripcion"],
                 cantidad=item["cantidad"],
                 subtotal=float(item["subtotal"]),
             )
-            for item in items_raw
+            for item in raw_items
         ]
 
-        data = ConsultaCarritoData(
-            id_carrito=carrito["id_carrito"],
-            id_usuario=carrito["id_usuario"],
-            moneda=carrito["moneda"],
-            estado=carrito["estado_carrito"],
+        response_data = CartQueryData(
+            id_carrito=cart["id_carrito"],
+            id_usuario=cart["id_usuario"],
+            moneda=cart["moneda"],
+            estado=cart["estado_carrito"],
             items=items,
         )
 
-        return ConsultaCarritoResponse(
+        return CartQueryResponse(
             mensaje="Carrito consultado exitosamente",
-            data=data,
+            data=response_data,
             success=True,
         )
 
     # ── HU-037: Calcular total de la compra ─────────────────────────
-    def calcular_total_compra(self, id_usuario: Optional[int]) -> CalculoTotalResponse:
+    def calculate_purchase_total(self, user_id: Optional[int]) -> TotalCalculationResponse:
         # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
-        if id_usuario is None or id_usuario <= 0:
-            raise CarritoNoIdentificadoException(
+        if user_id is None or user_id <= 0:
+            raise UnidentifiedCartException(
                 "No se pudo identificar el carrito del usuario"
             )
 
-        carrito = self.repo.obtener_carrito_por_usuario(id_usuario)
-        if not carrito:
-            raise CarritoNoIdentificadoException(
+        cart = self.repo.get_cart_by_user(user_id)
+        if not cart:
+            raise UnidentifiedCartException(
                 "No se pudo identificar el carrito del usuario"
             )
 
         # ── REGLA DE NEGOCIO RN-37 (409 Conflict) ──────────────────────
         # El carrito debe tener ítems válidos y sus bloqueos/servicios no deben haber expirado
-        if not carrito.get("tiene_items_validos", False) or not carrito.get("bloqueos_vigentes", False):
-            raise ReglaNegocioRN37Exception(
+        if not cart.get("tiene_items_validos", False) or not cart.get("bloqueos_vigentes", False):
+            raise BusinessRuleRN37Exception(
                 "El carrito está vacío o contiene servicios expirados que impiden liquidar"
             )
 
         # ── CÁLCULO FINANCIERO CON PRECISIÓN DECIMAL (AIN-05) ───────────
-        moneda = carrito.get("moneda", "COP")
-        decimales = self.repo.obtener_precision_moneda_ain05(moneda)
+        currency = cart.get("moneda", "COP")
+        decimals = self.repo.get_currency_precision_ain05(currency)
 
-        subtotal = round(float(carrito.get("subtotal", 2521008.0)), decimales)
-        impuestos = round(float(carrito.get("impuestos", 478992.0)), decimales)
-        descuentos = round(float(carrito.get("descuentos", 0.0)), decimales)
-        total_pagar = round(subtotal + impuestos - descuentos, decimales)
+        subtotal = round(float(cart.get("subtotal", 2521008.0)), decimals)
+        taxes = round(float(cart.get("impuestos", 478992.0)), decimals)
+        discounts = round(float(cart.get("descuentos", 0.0)), decimals)
+        total_to_pay = round(subtotal + taxes - discounts, decimals)
 
-        data = CalculoTotalData(
-            id_carrito=carrito["id_carrito"],
-            moneda=moneda,
+        response_data = TotalCalculationData(
+            id_carrito=cart["id_carrito"],
+            moneda=currency,
             subtotal=subtotal,
-            impuestos=impuestos,
-            descuentos=descuentos,
-            total_pagar=total_pagar,
+            impuestos=taxes,
+            descuentos=discounts,
+            total_pagar=total_to_pay,
         )
 
-        return CalculoTotalResponse(
+        return TotalCalculationResponse(
             mensaje="Total de la compra calculado exitosamente",
-            data=data,
+            data=response_data,
             success=True,
         )
 
     # ── HU-038: Cerrar compra ───────────────────────────────────────
-    def cerrar_compra(self, datos: CierreCarritoCreate) -> CierreCarritoResponse:
-        medio_pago = (datos.medio_pago or "").strip().upper()
-        direccion = (datos.direccion_facturacion or "").strip()
+    def close_purchase(self, data: CartCheckoutCreate) -> CartCheckoutResponse:
+        payment_method = (data.payment_method or "").strip().upper()
+        address = (data.billing_address or "").strip()
 
         # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
-        if not medio_pago or not direccion or len(direccion) < 5 or medio_pago not in MEDIOS_PAGO_PERMITIDOS:
-            raise DatosCierreCompraInvalidosException(
+        if not payment_method or not address or len(address) < 5 or payment_method not in ALLOWED_PAYMENT_METHODS:
+            raise InvalidCheckoutDataException(
                 "Datos de facturación o medio de pago incompletos"
             )
 
         # ── REGLA DE NEGOCIO RN-38 (409 Conflict) ──────────────────────
         # 1. Revalidar identidad del viajero en AIN-08
-        if not self.repo.verificar_identidad_ain08(datos.id_usuario):
-            raise ReglaNegocioRN38Exception(
+        if not self.repo.verify_identity_ain08(data.user_id):
+            raise BusinessRuleRN38Exception(
                 "El carrito ya fue cerrado previamente o algún bloqueo de servicio caducó"
             )
 
         # 2. Verificar que el carrito exista y esté en estado ABIERTO
-        carrito = self.repo.obtener_carrito(datos.id_carrito)
-        if not carrito or carrito.get("estado_carrito") != "ABIERTO":
-            raise ReglaNegocioRN38Exception(
+        cart = self.repo.get_cart(data.cart_id)
+        if not cart or cart.get("estado_carrito") != "ABIERTO":
+            raise BusinessRuleRN38Exception(
                 "El carrito ya fue cerrado previamente o algún bloqueo de servicio caducó"
             )
 
         # 3. Verificar que todos los bloqueos de vuelos (AIN-09) y hoteles (AIN-10) estén vigentes
-        if not self.repo.verificar_bloqueos_ain09_ain10(carrito):
-            raise ReglaNegocioRN38Exception(
+        if not self.repo.verify_locks_ain09_ain10(cart):
+            raise BusinessRuleRN38Exception(
                 "El carrito ya fue cerrado previamente o algún bloqueo de servicio caducó"
             )
 
         # ── CIERRE DEL CARRITO Y SOLICITUD DE COBRO (AIN-14) ────────────
-        carrito_cerrado = self.repo.cerrar_carrito_y_solicitar_cobro_ain14(
-            id_carrito=datos.id_carrito,
-            medio_pago=medio_pago,
-            direccion_facturacion=direccion,
+        closed_cart = self.repo.close_cart_and_request_charge_ain14(
+            cart_id=data.cart_id,
+            payment_method=payment_method,
+            billing_address=address,
         )
 
         # ── RESPUESTA ESTANDARIZADA (201 Created) ──────────────────────
-        data = CierreCarritoData(
-            id_carrito=carrito_cerrado["id_carrito"],
-            estado_carrito=carrito_cerrado["estado_carrito"],
-            codigo_reserva_preliminar=carrito_cerrado["codigo_reserva_preliminar"],
-            total_liquidado=float(carrito_cerrado["total_liquidado"]),
-            moneda=carrito_cerrado["moneda"],
+        response_data = CartCheckoutData(
+            id_carrito=closed_cart["id_carrito"],
+            estado_carrito=closed_cart["estado_carrito"],
+            codigo_reserva_preliminar=closed_cart["codigo_reserva_preliminar"],
+            total_liquidado=float(closed_cart["total_liquidado"]),
+            moneda=closed_cart["moneda"],
         )
 
-        return CierreCarritoResponse(
+        return CartCheckoutResponse(
             mensaje="Compra cerrada exitosamente, pendiente de confirmación de pago",
-            data=data,
+            data=response_data,
             success=True,
         )
 
     # ── HU-039: Crear reserva ───────────────────────────────────────
-    def crear_reserva(self, datos: ReservaCreate) -> ReservaResponse:
-        moneda = (datos.moneda or "").strip().upper()
+    def create_reservation(self, data: ReservationCreate) -> ReservationResponse:
+        currency = (data.currency or "").strip().upper()
 
         # ── VALIDACIÓN DE PARÁMETROS Y EXISTENCIA DEL CARRITO (400 Bad Request) ──
-        if moneda not in MONEDAS_PERMITIDAS or datos.total_reserva <= 0:
-            raise DatosReservaInvalidosException(
+        if currency not in ALLOWED_CURRENCIES or data.total_reservation <= 0:
+            raise InvalidReservationDataException(
                 "Datos inválidos o carrito no encontrado para generar la reserva"
             )
 
-        if not self.repo.verificar_identidad_ain08(datos.id_usuario):
-            raise DatosReservaInvalidosException(
+        if not self.repo.verify_identity_ain08(data.user_id):
+            raise InvalidReservationDataException(
                 "Datos inválidos o carrito no encontrado para generar la reserva"
             )
 
-        carrito = self.repo.obtener_carrito(datos.id_carrito)
-        if not carrito:
-            raise DatosReservaInvalidosException(
+        cart = self.repo.get_cart(data.cart_id)
+        if not cart:
+            raise InvalidReservationDataException(
                 "Datos inválidos o carrito no encontrado para generar la reserva"
             )
 
         # ── REGLA DE NEGOCIO RN-39 (409 Conflict) ──────────────────────
         # Evitar duplicidad de reserva sobre un mismo carrito de compras
-        if self.repo.verificar_reserva_existente_por_carrito(datos.id_carrito):
-            raise ReglaNegocioRN39Exception(
+        if self.repo.has_existing_reservation_for_cart(data.cart_id):
+            raise BusinessRuleRN39Exception(
                 "Ya existe una reserva generada para este carrito de compras"
             )
 
         # ── PERSISTENCIA DE LA RESERVA OFICIAL (MOD-05) ────────────────
-        registro = self.repo.crear_reserva(
-            id_usuario=datos.id_usuario,
-            id_carrito=datos.id_carrito,
-            moneda=moneda,
-            total_reserva=datos.total_reserva,
+        record = self.repo.create_reservation(
+            user_id=data.user_id,
+            cart_id=data.cart_id,
+            currency=currency,
+            total_reservation=data.total_reservation,
         )
 
         # ── RESPUESTA ESTANDARIZADA (201 Created) ──────────────────────
-        data = ReservaData(
-            id_reserva=registro["id_reserva"],
-            codigo_reserva=registro["codigo_reserva"],
-            id_usuario=registro["id_usuario"],
-            estado=registro["estado"],
-            total=registro["total"],
-            moneda=registro["moneda"],
-            fecha_creacion=registro["fecha_creacion"],
+        response_data = ReservationData(
+            id_reserva=record["id_reserva"],
+            codigo_reserva=record["codigo_reserva"],
+            id_usuario=record["id_usuario"],
+            estado=record["estado"],
+            total=record["total"],
+            moneda=record["moneda"],
+            fecha_creacion=record["fecha_creacion"],
         )
 
-        return ReservaResponse(
+        return ReservationResponse(
             mensaje="Reserva creada exitosamente",
-            data=data,
+            data=response_data,
             success=True,
         )
 
     # ── HU-040: Registrar viajeros ──────────────────────────────────
-    def registrar_viajeros(self, id_reserva: int, datos: RegistrarViajerosCreate) -> RegistrarViajerosResponse:
+    def register_travelers(self, reservation_id: int, data: RegisterTravelersCreate) -> RegisterTravelersResponse:
         # ── VALIDACIÓN DE PARÁMETROS Y CATÁLOGO AIN-01 (400 Bad Request) ──
-        if not datos.viajeros:
-            raise DatosViajerosInvalidosException(
+        if not data.travelers:
+            raise InvalidTravelersDataException(
                 "Datos de viajeros incompletos o tipo de documento inválido"
             )
 
-        reserva = self.repo.obtener_reserva_por_id(id_reserva)
-        if not reserva:
-            raise DatosViajerosInvalidosException(
+        reservation = self.repo.get_reservation_by_id(reservation_id)
+        if not reservation:
+            raise InvalidTravelersDataException(
                 "Datos de viajeros incompletos o tipo de documento inválido"
             )
 
-        viajeros_limpios = []
-        documentos_vistos = set()
-        hay_duplicados = False
+        cleaned_travelers = []
+        seen_documents = set()
+        has_duplicates = False
 
-        for v in datos.viajeros:
-            nombres = (v.nombres or "").strip()
-            apellidos = (v.apellidos or "").strip()
-            tipo_doc = (v.tipo_documento or "").strip().upper()
-            num_doc = (v.numero_documento or "").strip()
-            fecha_nac = (v.fecha_nacimiento or "").strip()
+        for traveler in data.travelers:
+            first_name = (traveler.first_name or "").strip()
+            last_name = (traveler.last_name or "").strip()
+            doc_type = (traveler.document_type or "").strip().upper()
+            doc_number = (traveler.document_number or "").strip()
+            birth_date = (traveler.birth_date or "").strip()
 
             # Validar campos obligatorios y formato de fecha YYYY-MM-DD
             if (
-                not nombres
-                or not apellidos
-                or not tipo_doc
-                or not num_doc
-                or len(num_doc) < 4
-                or not re.match(r"^\d{4}-\d{2}-\d{2}$", fecha_nac)
+                not first_name
+                or not last_name
+                or not doc_type
+                or not doc_number
+                or len(doc_number) < 4
+                or not re.match(r"^\d{4}-\d{2}-\d{2}$", birth_date)
             ):
-                raise DatosViajerosInvalidosException(
+                raise InvalidTravelersDataException(
                     "Datos de viajeros incompletos o tipo de documento inválido"
                 )
 
             # Validar tipo de documento contra AIN-01
-            if not self.repo.validar_tipo_documento_ain01(tipo_doc):
-                raise DatosViajerosInvalidosException(
+            if not self.repo.validate_document_type_ain01(doc_type):
+                raise InvalidTravelersDataException(
                     "Datos de viajeros incompletos o tipo de documento inválido"
                 )
 
-            if num_doc in documentos_vistos:
-                hay_duplicados = True
-            documentos_vistos.add(num_doc)
+            if doc_number in seen_documents:
+                has_duplicates = True
+            seen_documents.add(doc_number)
 
-            viajeros_limpios.append(
+            cleaned_travelers.append(
                 {
-                    "nombres": nombres,
-                    "apellidos": apellidos,
-                    "tipo_documento": tipo_doc,
-                    "numero_documento": num_doc,
-                    "fecha_nacimiento": fecha_nac,
-                    "es_titular": v.es_titular,
+                    "nombres": first_name,
+                    "apellidos": last_name,
+                    "tipo_documento": doc_type,
+                    "numero_documento": doc_number,
+                    "fecha_nacimiento": birth_date,
+                    "es_titular": traveler.is_holder,
                 }
             )
 
         # ── REGLA DE NEGOCIO RN-40 (409 Conflict) ──────────────────────
         # 1. Cantidad de viajeros debe coincidir con los cupos reservados (2 para 9001)
         # 2. No pueden existir números de documento repetidos en la misma reserva
-        cupos_esperados = int(reserva.get("cupos_reservados", 2))
-        if hay_duplicados or len(viajeros_limpios) != cupos_esperados:
-            raise ReglaNegocioRN40Exception(
+        expected_spots = int(reservation.get("cupos_reservados", 2))
+        if has_duplicates or len(cleaned_travelers) != expected_spots:
+            raise BusinessRuleRN40Exception(
                 "La cantidad de viajeros no coincide con los cupos o hay documentos duplicados"
             )
 
         # ── REGISTRO EN REPOSITORIO Y RESPUESTA (201 Created) ──────────
-        reserva_actualizada = self.repo.registrar_viajeros_en_reserva(
-            id_reserva=id_reserva,
-            viajeros=viajeros_limpios,
+        updated_reservation = self.repo.register_travelers_in_reservation(
+            reservation_id=reservation_id,
+            travelers=cleaned_travelers,
         )
 
-        data = RegistrarViajerosData(
-            id_reserva=reserva_actualizada["id_reserva"],
-            codigo_reserva=reserva_actualizada["codigo_reserva"],
-            total_viajeros_registrados=len(viajeros_limpios),
-            estado_nominacion=reserva_actualizada["estado_nominacion"],
+        response_data = RegisterTravelersData(
+            id_reserva=updated_reservation["id_reserva"],
+            codigo_reserva=updated_reservation["codigo_reserva"],
+            total_viajeros_registrados=len(cleaned_travelers),
+            estado_nominacion=updated_reservation["estado_nominacion"],
         )
 
-        return RegistrarViajerosResponse(
+        return RegisterTravelersResponse(
             mensaje="Viajeros registrados en la reserva exitosamente",
-            data=data,
+            data=response_data,
             success=True,
         )
 
     # ── HU-043: Cancelar reserva ────────────────────────────────────
-    def cancelar_reserva(self, id_reserva: int, datos: CancelarReservaCreate) -> CancelarReservaResponse:
-        motivo = (datos.motivo_cancelacion or "").strip()
+    def cancel_reservation(self, reservation_id: int, data: CancelReservationCreate) -> CancelReservationResponse:
+        reason = (data.cancellation_reason or "").strip()
 
         # ── VALIDACIÓN DE PARÁMETROS (400 Bad Request) ──────────────────
-        if not motivo or len(motivo) < 5 or datos.id_usuario <= 0:
-            raise MotivoCancelacionInvalidoException(
+        if not reason or len(reason) < 5 or data.user_id <= 0:
+            raise InvalidCancellationReasonException(
                 "Debe proporcionar un motivo válido para cancelar la reserva"
             )
 
         # ── REGLA DE NEGOCIO RN-43 (409 Conflict) ──────────────────────
         # 1. Verificar que la reserva exista
-        reserva = self.repo.obtener_reserva_por_id(id_reserva)
-        if not reserva:
-            raise ReglaNegocioRN43Exception(
+        reservation = self.repo.get_reservation_by_id(reservation_id)
+        if not reservation:
+            raise BusinessRuleRN43Exception(
                 "La reserva ya se encuentra cancelada o en un estado final que no permite anulación"
             )
 
         # 2. Verificar en AIN-05 que el estado actual de la reserva admita cancelación
-        estado_actual = reserva.get("estado", "")
-        if not self.repo.verificar_estado_admite_cancelacion_ain05(estado_actual):
-            raise ReglaNegocioRN43Exception(
+        current_status = reservation.get("estado", "")
+        if not self.repo.can_cancel_status_ain05(current_status):
+            raise BusinessRuleRN43Exception(
                 "La reserva ya se encuentra cancelada o en un estado final que no permite anulación"
             )
 
         # ── ACTUALIZACIÓN A CANCELADA Y NOTIFICACIÓN AIN-16 (200 OK) ────
-        resultado = self.repo.cancelar_reserva(id_reserva=id_reserva, motivo=motivo)
-        self.repo.notificar_cancelacion_ain16(
-            id_reserva=id_reserva,
-            codigo_reserva=resultado["codigo_reserva"],
-            id_usuario=datos.id_usuario,
+        result = self.repo.cancel_reservation(reservation_id=reservation_id, reason=reason)
+        self.repo.notify_cancellation_ain16(
+            reservation_id=reservation_id,
+            reservation_code=result["codigo_reserva"],
+            user_id=data.user_id,
         )
 
-        data = CancelarReservaData(
-            id_reserva=resultado["id_reserva"],
-            codigo_reserva=resultado["codigo_reserva"],
-            estado_anterior=resultado["estado_anterior"],
-            estado_actual=resultado["estado_actual"],
-            aplica_reembolso=resultado["aplica_reembolso"],
-            fecha_cancelacion=resultado["fecha_cancelacion"],
+        response_data = CancelReservationData(
+            id_reserva=result["id_reserva"],
+            codigo_reserva=result["codigo_reserva"],
+            estado_anterior=result["estado_anterior"],
+            estado_actual=result["estado_actual"],
+            aplica_reembolso=result["aplica_reembolso"],
+            fecha_cancelacion=result["fecha_cancelacion"],
         )
 
-        return CancelarReservaResponse(
+        return CancelReservationResponse(
             mensaje="Reserva cancelada exitosamente",
-            data=data,
+            data=response_data,
             success=True,
         )

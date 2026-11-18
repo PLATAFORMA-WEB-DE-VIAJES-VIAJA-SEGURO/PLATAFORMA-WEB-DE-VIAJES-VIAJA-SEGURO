@@ -1,156 +1,156 @@
 from datetime import date
 from typing import Optional
 from app.domain.paquete import (
-    PAISES_PAQUETE_VALIDOS,
-    MUNICIPIOS_PAQUETE_VALIDOS,
-    TIPOS_PAQUETE_VALIDOS,
-    CATEGORIAS_ACTIVIDAD_VALIDAS,
-    MONEDAS_PAQUETE_AIN04,
-    DestinoItemOut,
-    ConsultaDestinosOut,
-    ActividadItemOut,
-    ConsultaActividadesOut,
-    DisponibilidadActividadDataOut,
-    DisponibilidadActividadOut,
+    VALID_PACKAGE_COUNTRIES,
+    VALID_PACKAGE_MUNICIPALITIES,
+    VALID_PACKAGE_TYPES,
+    VALID_ACTIVITY_CATEGORIES,
+    VALID_PACKAGE_CURRENCIES_AIN04,
+    DestinationItemOut,
+    DestinationsQueryOut,
+    ActivityItemOut,
+    ActivitiesQueryOut,
+    ActivityAvailabilityDataOut,
+    ActivityAvailabilityOut,
 )
-from app.repositories.paquete_repository import PaqueteRepository
+from app.repositories.paquete_repository import PackageRepository
 
 
-class ErrorParametrosPaquete(Exception):
+class PackageParametersError(Exception):
     pass
 
 
-class ErrorReglaNegocioPaquete(Exception):
+class PackageBusinessRuleError(Exception):
     pass
 
 
-class PaqueteService:
-    def __init__(self, repo: PaqueteRepository):
+class PackageService:
+    def __init__(self, repo: PackageRepository):
         self.repo = repo
 
     # HU-023: Consultar destinos (RN-23)
-    def consultar_destinos(
+    def get_destinations(
         self,
-        pais: Optional[str] = None,
-        municipio: Optional[str] = None,
-        tipo_paquete: Optional[str] = None,
-    ) -> ConsultaDestinosOut:
-        pais_norm = pais.strip().upper() if pais else None
-        municipio_norm = municipio.strip().upper() if municipio else None
-        tipo_norm = tipo_paquete.strip().upper() if tipo_paquete else None
+        country: Optional[str] = None,
+        municipality: Optional[str] = None,
+        package_type: Optional[str] = None,
+    ) -> DestinationsQueryOut:
+        normalized_country = country.strip().upper() if country else None
+        normalized_municipality = municipality.strip().upper() if municipality else None
+        normalized_type = package_type.strip().upper() if package_type else None
 
-        if pais_norm and pais_norm != "503" and pais_norm not in PAISES_PAQUETE_VALIDOS:
-            raise ErrorParametrosPaquete(
+        if normalized_country and normalized_country != "503" and normalized_country not in VALID_PACKAGE_COUNTRIES:
+            raise PackageParametersError(
                 "El código de país no es válido en el catálogo PAR-02"
             )
-        if municipio_norm and municipio_norm != "503" and municipio_norm not in MUNICIPIOS_PAQUETE_VALIDOS:
-            raise ErrorParametrosPaquete(
+        if normalized_municipality and normalized_municipality != "503" and normalized_municipality not in VALID_PACKAGE_MUNICIPALITIES:
+            raise PackageParametersError(
                 "El código de municipio no es válido en el catálogo PAR-03"
             )
-        if tipo_norm and tipo_norm not in TIPOS_PAQUETE_VALIDOS:
-            raise ErrorParametrosPaquete(
+        if normalized_type and normalized_type not in VALID_PACKAGE_TYPES:
+            raise PackageParametersError(
                 "El tipo de paquete no es válido en el catálogo PAR-10"
             )
 
-        destinos = self.repo.consultar_destinos(
-            pais=pais_norm,
-            municipio=municipio_norm,
-            tipo_paquete=tipo_norm,
+        destinations = self.repo.get_destinations(
+            country=normalized_country,
+            municipality=normalized_municipality,
+            package_type=normalized_type,
         )
 
-        if not destinos:
-            raise ErrorReglaNegocioPaquete(
+        if not destinations:
+            raise PackageBusinessRuleError(
                 "No se encontraron destinos turísticos activos para los criterios consultados"
             )
 
-        return ConsultaDestinosOut(
+        return DestinationsQueryOut(
             mensaje="Destinos turísticos consultados exitosamente",
-            data=[DestinoItemOut(**d.to_response()) for d in destinos],
+            data=[DestinationItemOut(**dest.to_response()) for dest in destinations],
             success=True,
         )
 
     # HU-026: Consultar actividades del destino (RN-26)
-    def consultar_actividades_destino(
+    def get_destination_activities(
         self,
-        id_destino: str,
-        fecha_inicio: date,
-        fecha_fin: Optional[date] = None,
-        categoria: Optional[str] = None,
-    ) -> ConsultaActividadesOut:
-        destino_norm = id_destino.strip().upper()
-        categoria_norm = categoria.strip().upper() if categoria else None
+        destination_id: str,
+        start_date: date,
+        end_date: Optional[date] = None,
+        category: Optional[str] = None,
+    ) -> ActivitiesQueryOut:
+        normalized_destination = destination_id.strip().upper()
+        normalized_category = category.strip().upper() if category else None
 
-        if fecha_inicio < date.today():
-            raise ErrorParametrosPaquete(
+        if start_date < date.today():
+            raise PackageParametersError(
                 "La fecha de inicio de las actividades no puede ser anterior a la fecha actual"
             )
-        if fecha_fin and fecha_fin < fecha_inicio:
-            raise ErrorParametrosPaquete(
+        if end_date and end_date < start_date:
+            raise PackageParametersError(
                 "La fecha de fin no puede ser anterior a la fecha de inicio"
             )
-        if categoria_norm and categoria_norm not in CATEGORIAS_ACTIVIDAD_VALIDAS:
-            raise ErrorParametrosPaquete(
+        if normalized_category and normalized_category not in VALID_ACTIVITY_CATEGORIES:
+            raise PackageParametersError(
                 "La categoría de actividad no es válida (TOUR_GUIADO, AVENTURA, GASTRONOMIA, ACUATICA, CULTURAL)"
             )
 
-        destino = self.repo.obtener_destino_por_id(destino_norm)
-        if not destino:
-            raise ErrorReglaNegocioPaquete(
+        destination = self.repo.get_destination_by_id(normalized_destination)
+        if not destination:
+            raise PackageBusinessRuleError(
                 "El destino seleccionado no existe o no se encuentra activo"
             )
 
-        actividades = self.repo.consultar_actividades_destino(
-            id_destino=destino_norm,
-            categoria=categoria_norm,
+        activities = self.repo.get_destination_activities(
+            destination_id=normalized_destination,
+            category=normalized_category,
         )
 
-        if not actividades:
-            raise ErrorReglaNegocioPaquete(
+        if not activities:
+            raise PackageBusinessRuleError(
                 "No se encontraron actividades disponibles en AEX-03 para el destino y criterios indicados"
             )
 
-        return ConsultaActividadesOut(
+        return ActivitiesQueryOut(
             mensaje="Actividades del destino consultadas exitosamente",
-            data=[ActividadItemOut(**a.to_response()) for a in actividades],
+            data=[ActivityItemOut(**act.to_response()) for act in activities],
             success=True,
         )
 
     # HU-027: Verificar cupo y tarifa de actividad (RN-27)
-    def verificar_cupo_tarifa_actividad(
+    def check_activity_availability_and_fare(
         self,
-        id_actividad: str,
-        fecha_actividad: date,
-        cantidad_personas: int = 2,
-    ) -> DisponibilidadActividadOut:
-        if fecha_actividad < date.today():
-            raise ErrorParametrosPaquete(
+        activity_id: str,
+        activity_date: date,
+        people_count: int = 2,
+    ) -> ActivityAvailabilityOut:
+        if activity_date < date.today():
+            raise PackageParametersError(
                 "La fecha solicitada para la actividad no puede ser anterior a la fecha actual"
             )
 
-        actividad = self.repo.obtener_actividad_por_id(id_actividad)
-        if not actividad:
-            raise ErrorReglaNegocioPaquete(
+        activity = self.repo.get_activity_by_id(activity_id)
+        if not activity:
+            raise PackageBusinessRuleError(
                 "La actividad solicitada no existe o fue desactivada por el operador local"
             )
 
-        if actividad.moneda not in MONEDAS_PAQUETE_AIN04:
-            raise ErrorReglaNegocioPaquete(
+        if activity.currency not in VALID_PACKAGE_CURRENCIES_AIN04:
+            raise PackageBusinessRuleError(
                 "La moneda de la tarifa no está habilitada en el catálogo PAR-07 (AIN-04)"
             )
 
         # RN-27: Validar aforo suficiente en el operador local (AEX-03)
-        if actividad.cupos_diarios < cantidad_personas:
-            raise ErrorReglaNegocioPaquete(
+        if activity.daily_quota < people_count:
+            raise PackageBusinessRuleError(
                 "No hay cupos suficientes disponibles para la cantidad de personas solicitada en esta actividad"
             )
 
-        detalle = actividad.calcular_disponibilidad_tarifa(
-            fecha_actividad=fecha_actividad,
-            cantidad_personas=cantidad_personas,
+        detail = activity.calculate_availability_and_fare(
+            activity_date=activity_date,
+            people_count=people_count,
         )
 
-        return DisponibilidadActividadOut(
+        return ActivityAvailabilityOut(
             mensaje="Cupo y tarifa de actividad verificados exitosamente",
-            data=DisponibilidadActividadDataOut(**detalle),
+            data=ActivityAvailabilityDataOut(**detail),
             success=True,
         )

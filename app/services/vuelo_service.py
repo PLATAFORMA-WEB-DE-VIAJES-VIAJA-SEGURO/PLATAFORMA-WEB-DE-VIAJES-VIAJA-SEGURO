@@ -1,146 +1,146 @@
 from datetime import date
 from typing import Optional
 from app.domain.vuelo import (
-    AEROPUERTOS_VALIDOS,
-    CABINAS_VALIDAS,
-    MONEDAS_VALIDAS_AIN02,
-    VueloItemOut,
-    BusquedaVuelosOut,
-    TarifaVueloItemOut,
-    ConsultaTarifasVueloOut,
-    BloqueoPuestosCreate,
-    BloqueoPuestosDataOut,
-    BloqueoPuestosOut,
+    VALID_AIRPORTS,
+    VALID_CABINS,
+    VALID_CURRENCIES_AIN02,
+    FlightItemOut,
+    FlightSearchOut,
+    FlightFareItemOut,
+    FlightFaresQueryOut,
+    SeatLockCreate,
+    SeatLockDataOut,
+    SeatLockOut,
 )
-from app.repositories.vuelo_repository import VueloRepository
+from app.repositories.vuelo_repository import FlightRepository
 
 
-class ErrorParametrosBusquedaVuelo(Exception):
+class FlightSearchParametersError(Exception):
     pass
 
 
-class ErrorReglaNegocioVuelo(Exception):
+class FlightBusinessRuleError(Exception):
     pass
 
 
-class VueloService:
-    def __init__(self, repo: VueloRepository):
+class FlightService:
+    def __init__(self, repo: FlightRepository):
         self.repo = repo
 
     # HU-011: Buscar vuelos (RN-11)
-    def buscar_vuelos(
+    def search_flights(
         self,
-        origen: str,
-        destino: str,
-        fecha_salida: date,
-        pasajeros: int,
-        fecha_regreso: Optional[date] = None,
-    ) -> BusquedaVuelosOut:
-        origen_norm = origen.strip().upper()
-        destino_norm = destino.strip().upper()
+        origin: str,
+        destination: str,
+        departure_date: date,
+        passengers: int,
+        return_date: Optional[date] = None,
+    ) -> FlightSearchOut:
+        normalized_origin = origin.strip().upper()
+        normalized_destination = destination.strip().upper()
 
-        if origen_norm != "503" and origen_norm not in AEROPUERTOS_VALIDOS:
-            raise ErrorParametrosBusquedaVuelo(
+        if normalized_origin != "503" and normalized_origin not in VALID_AIRPORTS:
+            raise FlightSearchParametersError(
                 "El código IATA de origen o destino no es válido"
             )
-        if destino_norm != "503" and destino_norm not in AEROPUERTOS_VALIDOS:
-            raise ErrorParametrosBusquedaVuelo(
+        if normalized_destination != "503" and normalized_destination not in VALID_AIRPORTS:
+            raise FlightSearchParametersError(
                 "El código IATA de origen o destino no es válido"
             )
-        if origen_norm == destino_norm:
-            raise ErrorParametrosBusquedaVuelo(
+        if normalized_origin == normalized_destination:
+            raise FlightSearchParametersError(
                 "La ciudad de origen y destino no pueden ser iguales"
             )
-        if fecha_salida < date.today():
-            raise ErrorParametrosBusquedaVuelo(
+        if departure_date < date.today():
+            raise FlightSearchParametersError(
                 "La fecha de salida no puede ser anterior a la fecha actual"
             )
-        if fecha_regreso and fecha_regreso < fecha_salida:
-            raise ErrorParametrosBusquedaVuelo(
+        if return_date and return_date < departure_date:
+            raise FlightSearchParametersError(
                 "La fecha de regreso no puede ser anterior a la fecha de salida"
             )
 
-        resultados = self.repo.buscar_vuelos(
-            origen=origen_norm,
-            destino=destino_norm,
-            fecha_salida=fecha_salida,
-            pasajeros=pasajeros,
+        results = self.repo.search_flights(
+            origin=normalized_origin,
+            destination=normalized_destination,
+            departure_date=departure_date,
+            passengers=passengers,
         )
 
-        if not resultados:
-            raise ErrorReglaNegocioVuelo(
+        if not results:
+            raise FlightBusinessRuleError(
                 "No se encontraron vuelos disponibles para la ruta, fecha y cantidad de pasajeros solicitados"
             )
 
-        return BusquedaVuelosOut(
+        return FlightSearchOut(
             mensaje="Vuelos disponibles consultados exitosamente",
-            data=[VueloItemOut(**v.to_response()) for v in resultados],
+            data=[FlightItemOut(**flight.to_response()) for flight in results],
             success=True,
         )
 
     # HU-013: Consultar tarifas del vuelo (RN-13)
-    def consultar_tarifas_vuelo(
+    def get_flight_fares(
         self,
-        id_vuelo: str,
-        cabina: Optional[str] = None,
-        equipaje_bodega: int = 0,
-    ) -> ConsultaTarifasVueloOut:
-        cabina_norm = cabina.strip().upper() if cabina else None
-        if cabina_norm and cabina_norm not in CABINAS_VALIDAS:
-            raise ErrorParametrosBusquedaVuelo(
+        flight_id: str,
+        cabin: Optional[str] = None,
+        checked_baggage: int = 0,
+    ) -> FlightFaresQueryOut:
+        normalized_cabin = cabin.strip().upper() if cabin else None
+        if normalized_cabin and normalized_cabin not in VALID_CABINS:
+            raise FlightSearchParametersError(
                 "La cabina solicitada no es válida (use ECONOMICA, EJECUTIVA o PRIMERA)"
             )
 
-        vuelo = self.repo.obtener_por_id(id_vuelo)
-        if not vuelo:
-            raise ErrorReglaNegocioVuelo(
+        flight = self.repo.get_by_id(flight_id)
+        if not flight:
+            raise FlightBusinessRuleError(
                 "El vuelo solicitado no existe o no cuenta con tarifas vigentes"
             )
 
-        if vuelo.moneda not in MONEDAS_VALIDAS_AIN02:
-            raise ErrorReglaNegocioVuelo(
+        if flight.currency not in VALID_CURRENCIES_AIN02:
+            raise FlightBusinessRuleError(
                 "La moneda configurada para la tarifa no se encuentra activa en AIN-02"
             )
 
-        if vuelo.puestos_disponibles <= 0:
-            raise ErrorReglaNegocioVuelo(
+        if flight.available_seats <= 0:
+            raise FlightBusinessRuleError(
                 "El vuelo ya no dispone de cupos para cotizar tarifas vigentes"
             )
 
-        tarifas = vuelo.generar_familias_tarifarias(
-            cabina=cabina_norm,
-            equipaje_bodega=equipaje_bodega,
+        fares = flight.generate_fare_families(
+            cabin=normalized_cabin,
+            checked_baggage=checked_baggage,
         )
 
-        return ConsultaTarifasVueloOut(
+        return FlightFaresQueryOut(
             mensaje="Tarifas del vuelo consultadas exitosamente",
-            data=[TarifaVueloItemOut(**t) for t in tarifas],
+            data=[FlightFareItemOut(**fare) for fare in fares],
             success=True,
         )
 
     # HU-015: Bloquear puestos temporalmente (RN-15)
-    def bloquear_puestos_vuelo(
-        self, id_vuelo: str, datos: BloqueoPuestosCreate
-    ) -> BloqueoPuestosOut:
-        vuelo = self.repo.obtener_por_id(id_vuelo)
-        if not vuelo:
-            raise ErrorReglaNegocioVuelo(
+    def lock_flight_seats(
+        self, flight_id: str, data: SeatLockCreate
+    ) -> SeatLockOut:
+        flight = self.repo.get_by_id(flight_id)
+        if not flight:
+            raise FlightBusinessRuleError(
                 "El vuelo solicitado no existe o ya no se encuentra activo"
             )
 
-        if vuelo.puestos_disponibles < datos.cantidad_puestos:
-            raise ErrorReglaNegocioVuelo(
+        if flight.available_seats < data.seat_count:
+            raise FlightBusinessRuleError(
                 "No hay suficientes puestos disponibles en el vuelo para realizar el bloqueo solicitado"
             )
 
-        bloqueo = self.repo.crear_bloqueo(
-            vuelo=vuelo,
-            cantidad_puestos=datos.cantidad_puestos,
-            tiempo_bloqueo_minutos=datos.tiempo_bloqueo_minutos,
+        lock = self.repo.create_lock(
+            flight=flight,
+            seat_count=data.seat_count,
+            lock_time_minutes=data.lock_time_minutes,
         )
 
-        return BloqueoPuestosOut(
+        return SeatLockOut(
             mensaje="Puestos bloqueados temporalmente exitosamente",
-            data=BloqueoPuestosDataOut(**bloqueo.to_response()),
+            data=SeatLockDataOut(**lock.to_response()),
             success=True,
         )

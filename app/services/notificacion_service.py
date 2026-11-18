@@ -1,82 +1,83 @@
 import re
 from app.domain.notificacion import (
-    NotificacionCreate,
-    NotificacionResponse,
-    NotificacionData,
-    ReglaNegocioRN55Exception,
-    ValidacionParametrosException
+    NotificationCreate,
+    NotificationResponse,
+    NotificationData,
+    BusinessRuleRN55Exception,
+    NotificationParameterValidationException,
 )
-from app.repositories.notificacion_repository import NotificacionRepository
+from app.repositories.notificacion_repository import NotificationRepository
 
-class NotificacionService:
-    def __init__(self, repo: NotificacionRepository):
+
+class NotificationService:
+    def __init__(self, repo: NotificationRepository):
         self.repo = repo
 
-    def enviar_notificacion(self, datos: NotificacionCreate) -> NotificacionResponse:
-        canal = datos.canal.strip().upper()
-        destinatario = datos.destinatario.strip()
-        plantilla = datos.plantilla.strip().upper()
+    def send_notification(self, data: NotificationCreate) -> NotificationResponse:
+        channel = data.channel.strip().upper()
+        recipient = data.recipient.strip()
+        template = data.template.strip().upper()
 
         # ── VALIDACIÓN DE PARÁMETROS BÁSICOS (400 Bad Request) ─────────
-        if not canal or not destinatario or not plantilla:
-            raise ValidacionParametrosException(
+        if not channel or not recipient or not template:
+            raise NotificationParameterValidationException(
                 "El canal de envío, destinatario o plantilla no son válidos"
             )
 
         # ── REGLA DE NEGOCIO RN-55 (409 Conflict) ──────────────────────
         # 1. Canal no soportado (RN-55 solo permite EMAIL o SMS)
-        if canal not in ("EMAIL", "SMS"):
-            raise ReglaNegocioRN55Exception(
+        if channel not in ("EMAIL", "SMS"):
+            raise BusinessRuleRN55Exception(
                 "Canal no soportado. Los canales permitidos por RN-55 son EMAIL o SMS."
             )
 
         # 2. Formato de destinatario incompatible con el canal seleccionado (RN-55)
-        if canal == "EMAIL":
-            patron_email = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-            if not re.match(patron_email, destinatario):
-                raise ReglaNegocioRN55Exception(
+        if channel == "EMAIL":
+            email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
+            if not re.match(email_pattern, recipient):
+                raise BusinessRuleRN55Exception(
                     "Formato de destinatario incompatible con el canal EMAIL (RN-55)."
                 )
-        elif canal == "SMS":
-            patron_sms = r"^\+?[0-9]{7,15}$"
-            if not re.match(patron_sms, destinatario):
-                raise ReglaNegocioRN55Exception(
+        elif channel == "SMS":
+            sms_pattern = r"^\+?[0-9]{7,15}$"
+            if not re.match(sms_pattern, recipient):
+                raise BusinessRuleRN55Exception(
                     "Formato de número telefónico incompatible con el canal SMS (RN-55)."
                 )
 
         # 3. Validación de plantilla activa en el catálogo AIN-07
-        if not self.repo.es_plantilla_activa(plantilla):
-            raise ReglaNegocioRN55Exception(
-                f"La plantilla '{datos.plantilla}' no se encuentra activa en el catálogo (RN-55)."
+        if not self.repo.is_template_active(template):
+            raise BusinessRuleRN55Exception(
+                f"La plantilla '{data.template}' no se encuentra activa en el catálogo (RN-55)."
             )
 
         # 4. Destinatario bloqueado o límite de reintentos superado (RN-55)
-        if self.repo.esta_bloqueado(destinatario):
-            raise ReglaNegocioRN55Exception(
+        if self.repo.is_recipient_blocked(recipient):
+            raise BusinessRuleRN55Exception(
                 "El destinatario ha bloqueado notificaciones o se superó el límite de reintentos"
             )
 
         # ── DESPACHO A PROVEEDOR EXTERNO AEX-06 ─────────────────────────
-        registro = self.repo.despachar_aex06(
-            id_usuario=datos.id_usuario,
-            canal=canal,
-            destinatario=destinatario,
-            plantilla=plantilla,
-            variables=datos.variables
+        record = self.repo.dispatch_aex06(
+            user_id=data.user_id,
+            channel=channel,
+            recipient=recipient,
+            template=template,
+            variables=data.variables,
         )
 
         # ── RESPUESTA ESTANDARIZADA (201 Created) ───────────────────────
-        data_response = NotificacionData(
-            id_notificacion=registro["id_notificacion"],
-            canal=registro["canal"],
-            destinatario=registro["destinatario"],
-            plantilla=registro["plantilla"],
-            estado_envio=registro["estado_envio"],
-            fecha_envio=registro["fecha_envio"]
+        response_data = NotificationData(
+            id_notificacion=record["id_notificacion"],
+            canal=record["canal"],
+            destinatario=record["destinatario"],
+            plantilla=record["plantilla"],
+            estado_envio=record["estado_envio"],
+            fecha_envio=record["fecha_envio"],
         )
 
-        return NotificacionResponse(
+        return NotificationResponse(
             mensaje="Notificación enviada exitosamente",
-            data=data_response,
-            success=True
+            data=response_data,
+            success=True,
         )

@@ -1,39 +1,46 @@
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-class ReglaNegocioRN47Exception(Exception):
+
+class BusinessRuleRN47Exception(Exception):
     """Excepción para montos no coincidentes con AIN-15a o rechazo de pasarela (RN-47)."""
-    def __init__(self, mensaje: str = "El monto enviado no coincide con el saldo de la reserva o la transacción fue rechazada"):
-        self.mensaje = mensaje
-        super().__init__(self.mensaje)
+    def __init__(self, message: str = "El monto enviado no coincide con el saldo de la reserva o la transacción fue rechazada"):
+        self.message = message
+        super().__init__(self.message)
 
-class DatosPagoInvalidosException(Exception):
+
+class InvalidPaymentDataException(Exception):
     """Excepción para datos de pago faltantes o inválidos (400)."""
-    def __init__(self, mensaje: str = "Datos de pago incompletos o token de tarjeta inválido"):
-        self.mensaje = mensaje
-        super().__init__(self.mensaje)
+    def __init__(self, message: str = "Datos de pago incompletos o token de tarjeta inválido"):
+        self.message = message
+        super().__init__(self.message)
 
-class PasarelaNoDisponibleException(Exception):
+
+class ExternalGatewayUnavailableException(Exception):
     """Excepción para cuando la pasarela AEX-04 no responde (503)."""
-    def __init__(self, mensaje: str = "La pasarela de pagos externa no responde en este momento"):
-        self.mensaje = mensaje
-        super().__init__(self.mensaje)
+    def __init__(self, message: str = "La pasarela de pagos externa no responde en este momento"):
+        self.message = message
+        super().__init__(self.message)
 
-class TransaccionCreate(BaseModel):
-    codigo_reserva: str = Field(..., min_length=3, description="Código de la reserva a liquidar")
-    monto: float = Field(..., gt=0, description="Monto exacto a cobrar")
-    moneda: str = Field(..., min_length=3, max_length=3, description="Código ISO de la moneda (ej. COP)")
-    codigo_medio_pago: str = Field(..., min_length=2, description="Medio de pago seleccionado (ej. TC_VISA)")
-    token_tarjeta: str = Field(..., min_length=5, description="Token seguro de la tarjeta para AEX-04")
 
-    @field_validator("codigo_reserva", "moneda", "codigo_medio_pago", "token_tarjeta")
+class TransactionCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    reservation_code: str = Field(..., alias="codigo_reserva", min_length=3, description="Código de la reserva a liquidar")
+    amount: float = Field(..., alias="monto", gt=0, description="Monto exacto a cobrar")
+    currency: str = Field(..., alias="moneda", min_length=3, max_length=3, description="Código ISO de la moneda (ej. COP)")
+    payment_method_code: str = Field(..., alias="codigo_medio_pago", min_length=2, description="Medio de pago seleccionado (ej. TC_VISA)")
+    card_token: str = Field(..., alias="token_tarjeta", min_length=5, description="Token seguro de la tarjeta para AEX-04")
+
+    @field_validator("reservation_code", "currency", "payment_method_code", "card_token")
     @classmethod
-    def validar_no_vacio(cls, v: str) -> str:
-        if not v or not v.strip():
+    def validate_non_empty(cls, value: str) -> str:
+        if not value or not value.strip():
             raise ValueError("El campo no puede estar vacío.")
-        return v.strip()
+        return value.strip()
 
-class TransaccionData(BaseModel):
+
+class TransactionData(BaseModel):
     id_transaccion: int
     referencia_pasarela: str
     codigo_reserva: str
@@ -42,7 +49,8 @@ class TransaccionData(BaseModel):
     estado_transaccion: str
     estado_reserva: str
 
-class TransaccionResponse(BaseModel):
+
+class TransactionResponse(BaseModel):
     mensaje: str
-    data: Optional[TransaccionData] = None
+    data: Optional[TransactionData] = None
     success: bool

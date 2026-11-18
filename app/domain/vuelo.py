@@ -1,15 +1,15 @@
 from datetime import date, datetime, timedelta
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # Catálogos y reglas transversales (MOD-02 / AIN-02)
-AEROPUERTOS_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
-CABINAS_VALIDAS = {"ECONOMICA", "EJECUTIVA", "PRIMERA"}
-MONEDAS_VALIDAS_AIN02 = {"COP", "USD"}
+VALID_AIRPORTS = {"BOG", "MDE", "CLO", "BGA", "CTG", "MIA", "MAD", "MEX", "PTY"}
+VALID_CABINS = {"ECONOMICA", "EJECUTIVA", "PRIMERA"}
+VALID_CURRENCIES_AIN02 = {"COP", "USD"}
 
 
 # HU-011: Esquemas de búsqueda de vuelos
-class VueloItemOut(BaseModel):
+class FlightItemOut(BaseModel):
     id_vuelo: str
     aerolinea: str
     numero_vuelo: str
@@ -24,14 +24,14 @@ class VueloItemOut(BaseModel):
     moneda: str
 
 
-class BusquedaVuelosOut(BaseModel):
+class FlightSearchOut(BaseModel):
     mensaje: str
-    data: Optional[List[VueloItemOut]] = None
+    data: Optional[List[FlightItemOut]] = None
     success: bool
 
 
 # HU-013: Esquemas de consulta de tarifas del vuelo
-class TarifaVueloItemOut(BaseModel):
+class FlightFareItemOut(BaseModel):
     codigo_tarifa: str
     nombre_tarifa: str
     cabina: str
@@ -43,20 +43,22 @@ class TarifaVueloItemOut(BaseModel):
     moneda: str
 
 
-class ConsultaTarifasVueloOut(BaseModel):
+class FlightFaresQueryOut(BaseModel):
     mensaje: str
-    data: Optional[List[TarifaVueloItemOut]] = None
+    data: Optional[List[FlightFareItemOut]] = None
     success: bool
 
 
 # HU-015: Esquemas de bloqueo temporal de puestos
-class BloqueoPuestosCreate(BaseModel):
-    cantidad_puestos: int = Field(..., ge=1, le=9)
-    tiempo_bloqueo_minutos: int = Field(default=20, ge=5, le=20)
-    codigo_tarifa: Optional[str] = Field(default=None)
+class SeatLockCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    seat_count: int = Field(..., alias="cantidad_puestos", ge=1, le=9)
+    lock_time_minutes: int = Field(default=20, alias="tiempo_bloqueo_minutos", ge=5, le=20)
+    fare_code: Optional[str] = Field(default=None, alias="codigo_tarifa")
 
 
-class BloqueoPuestosDataOut(BaseModel):
+class SeatLockDataOut(BaseModel):
     id_bloqueo: str
     id_vuelo: str
     numero_vuelo: str
@@ -67,149 +69,149 @@ class BloqueoPuestosDataOut(BaseModel):
     estado: str
 
 
-class BloqueoPuestosOut(BaseModel):
+class SeatLockOut(BaseModel):
     mensaje: str
-    data: Optional[BloqueoPuestosDataOut] = None
+    data: Optional[SeatLockDataOut] = None
     success: bool
 
 
 # Entidad de dominio: Bloqueo de puestos (HU-015)
-class BloqueoVuelo:
+class FlightLock:
     def __init__(
         self,
-        id_bloqueo: str,
-        id_vuelo: str,
-        numero_vuelo: str,
-        cantidad_puestos: int,
-        puestos_restantes_vuelo: int,
-        tiempo_bloqueo_minutos: int = 20,
+        lock_id: str,
+        flight_id: str,
+        flight_number: str,
+        seat_count: int,
+        remaining_seats: int,
+        lock_time_minutes: int = 20,
     ):
-        self.id_bloqueo = id_bloqueo
-        self.id_vuelo = id_vuelo
-        self.numero_vuelo = numero_vuelo
-        self.cantidad_puestos = cantidad_puestos
-        self.puestos_restantes_vuelo = puestos_restantes_vuelo
-        self.tiempo_bloqueo_minutos = tiempo_bloqueo_minutos
-        self.fecha_expiracion = (
-            datetime.utcnow() + timedelta(minutes=tiempo_bloqueo_minutos)
+        self.lock_id = lock_id
+        self.flight_id = flight_id
+        self.flight_number = flight_number
+        self.seat_count = seat_count
+        self.remaining_seats = remaining_seats
+        self.lock_time_minutes = lock_time_minutes
+        self.expiration_date = (
+            datetime.utcnow() + timedelta(minutes=lock_time_minutes)
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.estado = "ACTIVO"
+        self.status = "ACTIVO"
 
     def to_response(self) -> dict:
         return {
-            "id_bloqueo": self.id_bloqueo,
-            "id_vuelo": self.id_vuelo,
-            "numero_vuelo": self.numero_vuelo,
-            "cantidad_puestos": self.cantidad_puestos,
-            "puestos_restantes_vuelo": self.puestos_restantes_vuelo,
-            "tiempo_bloqueo_minutos": self.tiempo_bloqueo_minutos,
-            "fecha_expiracion": self.fecha_expiracion,
-            "estado": self.estado,
+            "id_bloqueo": self.lock_id,
+            "id_vuelo": self.flight_id,
+            "numero_vuelo": self.flight_number,
+            "cantidad_puestos": self.seat_count,
+            "puestos_restantes_vuelo": self.remaining_seats,
+            "tiempo_bloqueo_minutos": self.lock_time_minutes,
+            "fecha_expiracion": self.expiration_date,
+            "estado": self.status,
         }
 
 
 # Entidad de dominio: Vuelo
-class Vuelo:
+class Flight:
     def __init__(
         self,
-        id_vuelo: str,
-        aerolinea: str,
-        numero_vuelo: str,
-        origen: str,
-        destino: str,
-        fecha_salida: date,
-        hora_salida: str,
-        hora_llegada: str,
-        duracion: str,
-        puestos_disponibles: int,
-        precio_base: float,
-        moneda: str = "COP",
-        activo: bool = True,
+        flight_id: str,
+        airline: str,
+        flight_number: str,
+        origin: str,
+        destination: str,
+        departure_date: date,
+        departure_time: str,
+        arrival_time: str,
+        duration: str,
+        available_seats: int,
+        base_price: float,
+        currency: str = "COP",
+        active: bool = True,
     ):
-        self.id_vuelo = id_vuelo
-        self.aerolinea = aerolinea
-        self.numero_vuelo = numero_vuelo
-        self.origen = origen
-        self.destino = destino
-        self.fecha_salida = fecha_salida
-        self.hora_salida = hora_salida
-        self.hora_llegada = hora_llegada
-        self.duracion = duracion
-        self.puestos_disponibles = puestos_disponibles
-        self.precio_base = precio_base
-        self.moneda = moneda
-        self.activo = activo
+        self.flight_id = flight_id
+        self.airline = airline
+        self.flight_number = flight_number
+        self.origin = origin
+        self.destination = destination
+        self.departure_date = departure_date
+        self.departure_time = departure_time
+        self.arrival_time = arrival_time
+        self.duration = duration
+        self.available_seats = available_seats
+        self.base_price = base_price
+        self.currency = currency
+        self.active = active
 
     # HU-011: Serialización del vuelo
     def to_response(self) -> dict:
         return {
-            "id_vuelo": self.id_vuelo,
-            "aerolinea": self.aerolinea,
-            "numero_vuelo": self.numero_vuelo,
-            "origen": self.origen,
-            "destino": self.destino,
-            "fecha_salida": self.fecha_salida,
-            "hora_salida": self.hora_salida,
-            "hora_llegada": self.hora_llegada,
-            "duracion": self.duracion,
-            "puestos_disponibles": self.puestos_disponibles,
-            "precio_base": self.precio_base,
-            "moneda": self.moneda,
+            "id_vuelo": self.flight_id,
+            "aerolinea": self.airline,
+            "numero_vuelo": self.flight_number,
+            "origen": self.origin,
+            "destino": self.destination,
+            "fecha_salida": self.departure_date,
+            "hora_salida": self.departure_time,
+            "hora_llegada": self.arrival_time,
+            "duracion": self.duration,
+            "puestos_disponibles": self.available_seats,
+            "precio_base": self.base_price,
+            "moneda": self.currency,
         }
 
     # HU-013: Cálculo de familias tarifarias
-    def generar_familias_tarifarias(self, cabina: Optional[str] = None, equipaje_bodega: int = 0) -> List[dict]:
-        factor_equipaje = equipaje_bodega * 85000.0
-        familias = [
+    def generate_fare_families(self, cabin: Optional[str] = None, checked_baggage: int = 0) -> List[dict]:
+        baggage_fee = checked_baggage * 85000.0
+        fare_families = [
             {
-                "codigo_tarifa": f"{self.id_vuelo}-ECO-BASIC",
+                "codigo_tarifa": f"{self.flight_id}-ECO-BASIC",
                 "nombre_tarifa": "Económica Básica",
                 "cabina": "ECONOMICA",
-                "equipaje_incluido": "1 artículo personal" + (f" + {equipaje_bodega} maleta(s) 23kg" if equipaje_bodega > 0 else ""),
+                "equipaje_incluido": "1 artículo personal" + (f" + {checked_baggage} maleta(s) 23kg" if checked_baggage > 0 else ""),
                 "permite_cambios": False,
-                "multiplicador": 1.0,
+                "multiplier": 1.0,
             },
             {
-                "codigo_tarifa": f"{self.id_vuelo}-ECO-FLEX",
+                "codigo_tarifa": f"{self.flight_id}-ECO-FLEX",
                 "nombre_tarifa": "Económica Flexible",
                 "cabina": "ECONOMICA",
-                "equipaje_incluido": f"1 equipaje de mano + {max(1, equipaje_bodega)} maleta(s) 23kg",
+                "equipaje_incluido": f"1 equipaje de mano + {max(1, checked_baggage)} maleta(s) 23kg",
                 "permite_cambios": True,
-                "multiplicador": 1.25,
+                "multiplier": 1.25,
             },
             {
-                "codigo_tarifa": f"{self.id_vuelo}-EJE-PLUS",
+                "codigo_tarifa": f"{self.flight_id}-EJE-PLUS",
                 "nombre_tarifa": "Ejecutiva Plus",
                 "cabina": "EJECUTIVA",
-                "equipaje_incluido": "2 maletas 32kg + sala VIP" + (f" + {equipaje_bodega} extra" if equipaje_bodega > 0 else ""),
+                "equipaje_incluido": "2 maletas 32kg + sala VIP" + (f" + {checked_baggage} extra" if checked_baggage > 0 else ""),
                 "permite_cambios": True,
-                "multiplicador": 1.85,
+                "multiplier": 1.85,
             },
             {
-                "codigo_tarifa": f"{self.id_vuelo}-PRI-SUITE",
+                "codigo_tarifa": f"{self.flight_id}-PRI-SUITE",
                 "nombre_tarifa": "Primera Clase Suite",
                 "cabina": "PRIMERA",
                 "equipaje_incluido": "3 maletas 32kg + embarque prioritario",
                 "permite_cambios": True,
-                "multiplicador": 2.6,
+                "multiplier": 2.6,
             },
         ]
 
-        resultado = []
-        for f in familias:
-            if cabina and f["cabina"] != cabina:
+        result = []
+        for family in fare_families:
+            if cabin and family["cabina"] != cabin:
                 continue
-            unitario = round((self.precio_base * f["multiplicador"]) + factor_equipaje, 2)
-            impuestos = round(unitario * 0.19, 2)
-            resultado.append({
-                "codigo_tarifa": f["codigo_tarifa"],
-                "nombre_tarifa": f["nombre_tarifa"],
-                "cabina": f["cabina"],
-                "equipaje_incluido": f["equipaje_incluido"],
-                "permite_cambios": f["permite_cambios"],
-                "precio_unitario": unitario,
-                "impuestos": impuestos,
-                "precio_total_pasajero": round(unitario + impuestos, 2),
-                "moneda": self.moneda,
+            unit_price = round((self.base_price * family["multiplier"]) + baggage_fee, 2)
+            taxes = round(unit_price * 0.19, 2)
+            result.append({
+                "codigo_tarifa": family["codigo_tarifa"],
+                "nombre_tarifa": family["nombre_tarifa"],
+                "cabina": family["cabina"],
+                "equipaje_incluido": family["equipaje_incluido"],
+                "permite_cambios": family["permite_cambios"],
+                "precio_unitario": unit_price,
+                "impuestos": taxes,
+                "precio_total_pasajero": round(unit_price + taxes, 2),
+                "moneda": self.currency,
             })
-        return resultado
+        return result

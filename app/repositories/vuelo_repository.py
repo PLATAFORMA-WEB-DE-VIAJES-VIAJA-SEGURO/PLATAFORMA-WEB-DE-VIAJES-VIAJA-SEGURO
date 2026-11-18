@@ -2,129 +2,129 @@ import os
 from datetime import date
 from typing import List, Optional
 from dotenv import load_dotenv
-from app.domain.vuelo import Vuelo, BloqueoVuelo
+from app.domain.vuelo import Flight, FlightLock
 
 
-def _verificar_disponibilidad_gds(valor_control: str = "", destino: str = "") -> None:
+def _check_gds_availability(control_value: str = "", destination: str = "") -> None:
     load_dotenv(override=True)
-    falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
+    simulate_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() == "true"
     if (
-        falla_env
-        or valor_control.upper() in {"503", "VL-503"}
-        or destino.upper() == "503"
+        simulate_failure
+        or control_value.upper() in {"503", "VL-503"}
+        or destination.upper() == "503"
     ):
         raise RuntimeError("Fallo de conexión con el proveedor externo AEX-01 (GDS Aerolíneas)")
 
 
-class VueloRepository:
+class FlightRepository:
     def __init__(self):
-        self._vuelos: List[Vuelo] = []
-        self._bloqueos: List[BloqueoVuelo] = []
-        self._consecutivo_bloqueo: int = 15001
+        self._flights: List[Flight] = []
+        self._locks: List[FlightLock] = []
+        self._lock_sequence: int = 15001
         self._seed()
 
     def _seed(self):
-        self._vuelos = [
-            Vuelo(
-                id_vuelo="VL-101",
-                aerolinea="Avianca",
-                numero_vuelo="AV8520",
-                origen="BOG",
-                destino="CTG",
-                fecha_salida=date(2026, 12, 15),
-                hora_salida="07:30",
-                hora_llegada="09:00",
-                duracion="1h 30m",
-                puestos_disponibles=12,
-                precio_base=320000.0,
-                moneda="COP",
+        self._flights = [
+            Flight(
+                flight_id="VL-101",
+                airline="Avianca",
+                flight_number="AV8520",
+                origin="BOG",
+                destination="CTG",
+                departure_date=date(2026, 12, 15),
+                departure_time="07:30",
+                arrival_time="09:00",
+                duration="1h 30m",
+                available_seats=12,
+                base_price=320000.0,
+                currency="COP",
             ),
-            Vuelo(
-                id_vuelo="VL-102",
-                aerolinea="LATAM Airlines",
-                numero_vuelo="LA4110",
-                origen="BOG",
-                destino="CTG",
-                fecha_salida=date(2026, 12, 15),
-                hora_salida="14:15",
-                hora_llegada="15:45",
-                duracion="1h 30m",
-                puestos_disponibles=6,
-                precio_base=295000.0,
-                moneda="COP",
+            Flight(
+                flight_id="VL-102",
+                airline="LATAM Airlines",
+                flight_number="LA4110",
+                origin="BOG",
+                destination="CTG",
+                departure_date=date(2026, 12, 15),
+                departure_time="14:15",
+                arrival_time="15:45",
+                duration="1h 30m",
+                available_seats=6,
+                base_price=295000.0,
+                currency="COP",
             ),
-            Vuelo(
-                id_vuelo="VL-103",
-                aerolinea="Copa Airlines",
-                numero_vuelo="CM302",
-                origen="BOG",
-                destino="MIA",
-                fecha_salida=date(2026, 12, 20),
-                hora_salida="10:00",
-                hora_llegada="14:40",
-                duracion="4h 40m",
-                puestos_disponibles=8,
-                precio_base=1450000.0,
-                moneda="COP",
+            Flight(
+                flight_id="VL-103",
+                airline="Copa Airlines",
+                flight_number="CM302",
+                origin="BOG",
+                destination="MIA",
+                departure_date=date(2026, 12, 20),
+                departure_time="10:00",
+                arrival_time="14:40",
+                duration="4h 40m",
+                available_seats=8,
+                base_price=1450000.0,
+                currency="COP",
             ),
-            Vuelo(
-                id_vuelo="VL-104",
-                aerolinea="Iberia",
-                numero_vuelo="IB6588",
-                origen="BOG",
-                destino="MAD",
-                fecha_salida=date(2026, 12, 22),
-                hora_salida="18:10",
-                hora_llegada="10:30",
-                duracion="10h 20m",
-                puestos_disponibles=0,
-                precio_base=3100000.0,
-                moneda="COP",
+            Flight(
+                flight_id="VL-104",
+                airline="Iberia",
+                flight_number="IB6588",
+                origin="BOG",
+                destination="MAD",
+                departure_date=date(2026, 12, 22),
+                departure_time="18:10",
+                arrival_time="10:30",
+                duration="10h 20m",
+                available_seats=0,
+                base_price=3100000.0,
+                currency="COP",
             ),
         ]
 
     # HU-011: Buscar vuelos disponibles en AEX-01
-    def buscar_vuelos(
-        self, origen: str, destino: str, fecha_salida: date, pasajeros: int
-    ) -> List[Vuelo]:
-        _verificar_disponibilidad_gds(origen, destino)
+    def search_flights(
+        self, origin: str, destination: str, departure_date: date, passengers: int
+    ) -> List[Flight]:
+        _check_gds_availability(origin, destination)
         return [
-            v for v in self._vuelos
-            if v.activo
-            and v.origen == origen
-            and v.destino == destino
-            and v.fecha_salida == fecha_salida
-            and v.puestos_disponibles >= pasajeros
+            flight for flight in self._flights
+            if flight.active
+            and flight.origin == origin
+            and flight.destination == destination
+            and flight.departure_date == departure_date
+            and flight.available_seats >= passengers
         ]
 
     # HU-013 y HU-015: Obtener vuelo por ID
-    def obtener_por_id(self, id_vuelo: str) -> Optional[Vuelo]:
-        _verificar_disponibilidad_gds(id_vuelo)
+    def get_by_id(self, flight_id: str) -> Optional[Flight]:
+        _check_gds_availability(flight_id)
         return next(
-            (v for v in self._vuelos if v.id_vuelo == id_vuelo.strip().upper() and v.activo),
+            (flight for flight in self._flights if flight.flight_id == flight_id.strip().upper() and flight.active),
             None,
         )
 
     # HU-015: Registrar bloqueo temporal y descontar cupos disponibles en AEX-01
-    def crear_bloqueo(
+    def create_lock(
         self,
-        vuelo: Vuelo,
-        cantidad_puestos: int,
-        tiempo_bloqueo_minutos: int = 20,
-    ) -> BloqueoVuelo:
-        _verificar_disponibilidad_gds(vuelo.id_vuelo)
-        vuelo.puestos_disponibles -= cantidad_puestos
-        nuevo_bloqueo = BloqueoVuelo(
-            id_bloqueo=f"BLK-{self._consecutivo_bloqueo}",
-            id_vuelo=vuelo.id_vuelo,
-            numero_vuelo=vuelo.numero_vuelo,
-            cantidad_puestos=cantidad_puestos,
-            puestos_restantes_vuelo=vuelo.puestos_disponibles,
-            tiempo_bloqueo_minutos=tiempo_bloqueo_minutos,
+        flight: Flight,
+        seat_count: int,
+        lock_time_minutes: int = 20,
+    ) -> FlightLock:
+        _check_gds_availability(flight.flight_id)
+        flight.available_seats -= seat_count
+        new_lock = FlightLock(
+            lock_id=f"BLK-{self._lock_sequence}",
+            flight_id=flight.flight_id,
+            flight_number=flight.flight_number,
+            seat_count=seat_count,
+            remaining_seats=flight.available_seats,
+            lock_time_minutes=lock_time_minutes,
         )
-        self._bloqueos.append(nuevo_bloqueo)
-        self._consecutivo_bloqueo += 1
-        return nuevo_bloqueo
+        self._locks.append(new_lock)
+        self._lock_sequence += 1
+        return new_lock
 
 
-vuelo_repository = VueloRepository()
+flight_repository = FlightRepository()

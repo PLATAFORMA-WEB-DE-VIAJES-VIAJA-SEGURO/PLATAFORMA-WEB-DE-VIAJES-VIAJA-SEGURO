@@ -3,31 +3,31 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from app.domain.factura import (
-    FacturaCreate,
-    FacturaResponse,
-    ReglaNegocioRN48Exception,
-    DatosFiscalesInvalidosException,
-    FacturacionNoDisponibleException
+    InvoiceCreate,
+    InvoiceResponse,
+    BusinessRuleRN48Exception,
+    InvalidTaxDataException,
+    BillingProviderUnavailableException,
 )
-from app.services.factura_service import FacturaService
-from app.repositories.factura_repository import factura_repository
-from app.repositories.transaccion_repository import transaccion_repository
+from app.services.factura_service import InvoiceService
+from app.repositories.factura_repository import invoice_repository
+from app.repositories.transaccion_repository import transaction_repository
 
 router = APIRouter(
     prefix="/api/v1/pagos",
-    tags=["Pagos"]
+    tags=["Pagos"],
 )
 
-servicio = FacturaService(
-    repo_factura=factura_repository,
-    repo_transaccion=transaccion_repository
+service = InvoiceService(
+    invoice_repo=invoice_repository,
+    transaction_repo=transaction_repository,
 )
 
 # Documentación OpenAPI para Swagger UI (/docs)
-RESPUESTAS_OPENAPI_FACTURA = {
+OPENAPI_INVOICE_RESPONSES = {
     201: {
         "description": "Factura electrónica emitida exitosamente",
-        "model": FacturaResponse,
+        "model": InvoiceResponse,
         "content": {
             "application/json": {
                 "example": {
@@ -38,12 +38,12 @@ RESPUESTAS_OPENAPI_FACTURA = {
                         "id_transaccion": 47001,
                         "cufe": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0",
                         "total_facturado": 3000000.0,
-                        "estado_dian": "VALIDADA"
+                        "estado_dian": "VALIDADA",
                     },
-                    "success": True
+                    "success": True,
                 }
             }
-        }
+        },
     },
     400: {
         "description": "Datos fiscales del adquirente incompletos o inválidos",
@@ -52,10 +52,10 @@ RESPUESTAS_OPENAPI_FACTURA = {
                 "example": {
                     "mensaje": "Datos fiscales del adquirente incompletos",
                     "data": None,
-                    "success": False
+                    "success": False,
                 }
             }
-        }
+        },
     },
     409: {
         "description": "Error por Regla de Negocio RN-48 (transacción no aprobada o ya facturada)",
@@ -64,10 +64,10 @@ RESPUESTAS_OPENAPI_FACTURA = {
                 "example": {
                     "mensaje": "La transacción no está aprobada o ya cuenta con una factura emitida",
                     "data": None,
-                    "success": False
+                    "success": False,
                 }
             }
-        }
+        },
     },
     503: {
         "description": "Falla de Disponibilidad (Proveedor AEX-05 no disponible)",
@@ -76,79 +76,77 @@ RESPUESTAS_OPENAPI_FACTURA = {
                 "example": {
                     "mensaje": "El proveedor de facturación electrónica no está disponible",
                     "data": None,
-                    "success": False
+                    "success": False,
                 }
             }
-        }
-    }
+        },
+    },
 }
 
 
 @router.post(
     "/facturas",
-    response_model=FacturaResponse,
+    response_model=InvoiceResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=RESPUESTAS_OPENAPI_FACTURA,
+    responses=OPENAPI_INVOICE_RESPONSES,
     summary="Emitir factura electrónica (HU-048)",
-    description="Genera la factura electrónica con CUFE ante el proveedor AEX-05 para una transacción aprobada. Aplica RN-48."
+    description="Genera la factura electrónica con CUFE ante el proveedor AEX-05 para una transacción aprobada. Aplica RN-48.",
 )
-def emitir_factura(payload: FacturaCreate):
+def issue_invoice(payload: InvoiceCreate):
     # Recargar variables de entorno dinámicamente
     load_dotenv(override=True)
-    simular_falla_env = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
+    simulate_env_failure = os.getenv("SIMULAR_FALLA_SERVIDOR", "False").strip().lower() in ("true", "1", "yes")
 
     # Caso 4: Simulación de fallo de AEX-05 (503 Service Unavailable)
-    # Activado si SIMULAR_FALLA_SERVIDOR="True" en .env o si id_transaccion == 503
-    es_simulacion_falla = payload.id_transaccion == 503
+    is_simulated_failure = payload.transaction_id == 503
 
-    if simular_falla_env or es_simulacion_falla:
+    if simulate_env_failure or is_simulated_failure:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "mensaje": "El proveedor de facturación electrónica no está disponible",
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
 
     try:
-        resultado = servicio.emitir_factura(
-            id_transaccion=payload.id_transaccion,
-            tipo_documento_fiscal=payload.tipo_documento_fiscal,
-            numero_documento_fiscal=payload.numero_documento_fiscal,
-            razon_social=payload.razon_social,
-            correo_facturacion=payload.correo_facturacion
+        return service.issue_invoice(
+            transaction_id=payload.transaction_id,
+            tax_document_type=payload.tax_document_type,
+            tax_document_number=payload.tax_document_number,
+            company_name=payload.company_name,
+            billing_email=payload.billing_email,
         )
-        return resultado
-    except ReglaNegocioRN48Exception as e:
+    except BusinessRuleRN48Exception as exc:
         # Caso 2: Error por Regla de Negocio RN-48 -> 409 Conflict
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
-                "mensaje": str(e),
+                "mensaje": str(exc),
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
-    except DatosFiscalesInvalidosException as e:
+    except InvalidTaxDataException as exc:
         # Caso 3: Error de Validación -> 400 Bad Request
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
-                "mensaje": str(e),
+                "mensaje": str(exc),
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
-    except FacturacionNoDisponibleException as e:
+    except BillingProviderUnavailableException as exc:
         # Caso 4: Falla de Disponibilidad -> 503 Service Unavailable
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
-                "mensaje": str(e),
+                "mensaje": str(exc),
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )
     except Exception:
         # Fallos imprevistos ocultando trazas técnicas -> 503
@@ -157,6 +155,6 @@ def emitir_factura(payload: FacturaCreate):
             content={
                 "mensaje": "El proveedor de facturación electrónica no está disponible",
                 "data": None,
-                "success": False
-            }
+                "success": False,
+            },
         )

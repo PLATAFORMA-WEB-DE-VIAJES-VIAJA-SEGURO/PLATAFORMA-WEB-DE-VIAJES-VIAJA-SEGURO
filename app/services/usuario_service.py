@@ -1,101 +1,101 @@
 from typing import List
 from app.domain.usuario import (
-    Usuario,
-    UsuarioCreate,
-    UsuarioDataOut,
-    RegistroUsuarioOut,
-    UsuarioLogin,
+    User,
+    UserCreate,
+    UserDataOut,
+    UserRegistrationOut,
+    UserLogin,
     LoginDataOut,
-    LoginUsuarioOut,
-    TIPOS_DOCUMENTO_VALIDOS,
-    PAISES_VALIDOS,
-    MUNICIPIOS_VALIDOS,
-    ROLES_VALIDOS,
+    UserLoginOut,
+    VALID_DOCUMENT_TYPES,
+    VALID_COUNTRIES,
+    VALID_MUNICIPALITIES,
+    VALID_ROLES,
 )
-from app.repositories.usuario_repository import UsuarioRepository
+from app.repositories.usuario_repository import UserRepository
 
 
-class ErrorCatalogoInvalido(Exception):
+class InvalidCatalogError(Exception):
     pass
 
 
-class ErrorCorreoDuplicado(Exception):
+class DuplicateEmailError(Exception):
     pass
 
 
-class ErrorCredencialesInvalidas(Exception):
+class InvalidCredentialsError(Exception):
     pass
 
 
-class UsuarioService:
-    def __init__(self, repo: UsuarioRepository):
+class UserService:
+    def __init__(self, repo: UserRepository):
         self.repo = repo
 
-    def _validar_referencias(self, datos: UsuarioCreate) -> None:
+    def _validate_references(self, data: UserCreate) -> None:
         if (
-            datos.tipo_documento not in TIPOS_DOCUMENTO_VALIDOS
-            or datos.pais not in PAISES_VALIDOS
-            or datos.municipio not in MUNICIPIOS_VALIDOS
-            or (datos.rol and datos.rol not in ROLES_VALIDOS)
+            data.document_type not in VALID_DOCUMENT_TYPES
+            or data.country not in VALID_COUNTRIES
+            or data.municipality not in VALID_MUNICIPALITIES
+            or (data.role and data.role not in VALID_ROLES)
         ):
-            raise ErrorCatalogoInvalido(
+            raise InvalidCatalogError(
                 "El tipo de documento, rol o ubicación proporcionada no son válidos"
             )
 
-    def registrar_usuario(self, datos: UsuarioCreate) -> RegistroUsuarioOut:
-        self._validar_referencias(datos)
+    def register_user(self, data: UserCreate) -> UserRegistrationOut:
+        self._validate_references(data)
 
-        if self.repo.obtener_activo_por_correo(datos.correo):
-            raise ErrorCorreoDuplicado(
+        if self.repo.get_active_by_email(data.email):
+            raise DuplicateEmailError(
                 "El correo electrónico ya se encuentra registrado en una cuenta activa"
             )
 
-        password_hash = Usuario.encriptar_password(datos.password)
-        usuario_creado = self.repo.crear(
-            nombres=datos.nombres,
-            apellidos=datos.apellidos,
-            correo=datos.correo,
+        password_hash = User.hash_password(data.password)
+        created_user = self.repo.create(
+            first_name=data.first_name,
+            last_name=data.last_name,
+            email=data.email,
             password_hash=password_hash,
-            tipo_documento=datos.tipo_documento,
-            numero_documento=datos.numero_documento,
-            pais=datos.pais,
-            municipio=datos.municipio,
-            rol=datos.rol or "VIAJERO",
+            document_type=data.document_type,
+            document_number=data.document_number,
+            country=data.country,
+            municipality=data.municipality,
+            role=data.role or "VIAJERO",
         )
 
-        return RegistroUsuarioOut(
+        return UserRegistrationOut(
             mensaje="Usuario registrado exitosamente",
-            data=UsuarioDataOut(**usuario_creado.to_response()),
+            data=UserDataOut(**created_user.to_response()),
             success=True,
         )
 
-    def iniciar_sesion(self, datos: UsuarioLogin) -> LoginUsuarioOut:
-        usuario = self.repo.obtener_por_correo(datos.correo)
+    def login_user(self, data: UserLogin) -> UserLoginOut:
+        user = self.repo.get_by_email(data.email)
 
         # RN-02: Verifica existencia, estado ACTIVO y coincidencia de hash
-        if not usuario or not usuario.esta_activo() or not usuario.verificar_password(datos.password):
-            raise ErrorCredencialesInvalidas(
+        if not user or not user.is_active() or not user.verify_password(data.password):
+            raise InvalidCredentialsError(
                 "Credenciales inválidas o cuenta inactiva"
             )
 
-        token = Usuario.generar_token_sesion()
+        token = User.generate_session_token()
 
-        return LoginUsuarioOut(
+        return UserLoginOut(
             mensaje="Inicio de sesión exitoso",
             data=LoginDataOut(
                 token=token,
                 tipo_token="Bearer",
-                id_usuario=usuario.id_usuario,
-                nombres=usuario.nombres,
-                apellidos=usuario.apellidos,
-                correo=usuario.correo,
-                rol=usuario.rol,
+                id_usuario=user.user_id,
+                nombres=user.first_name,
+                apellidos=user.last_name,
+                correo=user.email,
+                rol=user.role,
             ),
             success=True,
         )
 
-    def listar_usuarios(self) -> List[UsuarioDataOut]:
+    def list_users(self) -> List[UserDataOut]:
         return [
-            UsuarioDataOut(**u.to_response())
-            for u in self.repo.obtener_todos()
+            UserDataOut(**user.to_response())
+            for user in self.repo.get_all()
         ]

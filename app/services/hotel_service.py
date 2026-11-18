@@ -1,26 +1,26 @@
 from datetime import date
 from typing import Optional
 from app.domain.hotel import (
-    MUNICIPIOS_HOTEL_VALIDOS,
-    CATEGORIAS_HOTEL_VALIDAS,
-    TIPOS_HABITACION_VALIDOS,
-    MONEDAS_HOTEL_AIN03,
+    VALID_HOTEL_MUNICIPALITIES,
+    VALID_HOTEL_CATEGORIES,
+    VALID_ROOM_TYPES,
+    VALID_HOTEL_CURRENCIES_AIN03,
     HotelItemOut,
-    BusquedaHotelesOut,
-    HabitacionTarifaItemOut,
-    ConsultaHabitacionesOut,
-    BloqueoHabitacionIn,
-    BloqueoHabitacionDataOut,
-    BloqueoHabitacionOut,
+    HotelSearchOut,
+    RoomRateItemOut,
+    RoomRatesQueryOut,
+    RoomLockIn,
+    RoomLockDataOut,
+    RoomLockOut,
 )
 from app.repositories.hotel_repository import HotelRepository
 
 
-class ErrorParametrosHotel(Exception):
+class HotelParametersError(Exception):
     pass
 
 
-class ErrorReglaNegocioHotel(Exception):
+class HotelBusinessRuleError(Exception):
     pass
 
 
@@ -29,177 +29,177 @@ class HotelService:
         self.repo = repo
 
     # HU-017: Buscar hoteles (RN-17)
-    def buscar_hoteles(
+    def search_hotels(
         self,
-        ciudad: str,
-        fecha_entrada: date,
-        fecha_salida: date,
-        huespedes: int,
-        categoria: Optional[str] = None,
-    ) -> BusquedaHotelesOut:
-        ciudad_norm = ciudad.strip().upper()
-        categoria_norm = categoria.strip().upper() if categoria else None
+        city: str,
+        check_in_date: date,
+        check_out_date: date,
+        guests: int,
+        category: Optional[str] = None,
+    ) -> HotelSearchOut:
+        normalized_city = city.strip().upper()
+        normalized_category = category.strip().upper() if category else None
 
-        if ciudad_norm != "503" and ciudad_norm not in MUNICIPIOS_HOTEL_VALIDOS:
-            raise ErrorParametrosHotel(
+        if normalized_city != "503" and normalized_city not in VALID_HOTEL_MUNICIPALITIES:
+            raise HotelParametersError(
                 "El código de ciudad/municipio no es válido en el catálogo PAR-03"
             )
-        if categoria_norm and categoria_norm not in CATEGORIAS_HOTEL_VALIDAS:
-            raise ErrorParametrosHotel(
+        if normalized_category and normalized_category not in VALID_HOTEL_CATEGORIES:
+            raise HotelParametersError(
                 "La categoría hotelera no es válida en el catálogo PAR-08"
             )
-        if fecha_entrada < date.today():
-            raise ErrorParametrosHotel(
+        if check_in_date < date.today():
+            raise HotelParametersError(
                 "La fecha de entrada no puede ser anterior a la fecha actual"
             )
-        if fecha_salida <= fecha_entrada:
-            raise ErrorParametrosHotel(
+        if check_out_date <= check_in_date:
+            raise HotelParametersError(
                 "La fecha de salida debe ser al menos un día posterior a la fecha de entrada"
             )
 
-        resultados = self.repo.buscar_hoteles(
-            municipio=ciudad_norm,
-            huespedes=huespedes,
-            categoria=categoria_norm,
+        results = self.repo.search_hotels(
+            municipality=normalized_city,
+            guests=guests,
+            category=normalized_category,
         )
 
-        if not resultados:
-            raise ErrorReglaNegocioHotel(
+        if not results:
+            raise HotelBusinessRuleError(
                 "No se encontraron hoteles disponibles para el destino, fechas y huéspedes solicitados"
             )
 
-        return BusquedaHotelesOut(
+        return HotelSearchOut(
             mensaje="Hoteles disponibles consultados exitosamente",
-            data=[HotelItemOut(**h.to_response()) for h in resultados],
+            data=[HotelItemOut(**hotel.to_response()) for hotel in results],
             success=True,
         )
 
     # HU-019: Consultar habitaciones y tarifas (RN-19)
-    def consultar_habitaciones_tarifas(
+    def get_rooms_and_rates(
         self,
-        id_hotel: str,
-        fecha_entrada: date,
-        fecha_salida: date,
-        huespedes: int = 2,
-        tipo_habitacion: Optional[str] = None,
-    ) -> ConsultaHabitacionesOut:
-        tipo_norm = tipo_habitacion.strip().upper() if tipo_habitacion else None
+        hotel_id: str,
+        check_in_date: date,
+        check_out_date: date,
+        guests: int = 2,
+        room_type: Optional[str] = None,
+    ) -> RoomRatesQueryOut:
+        normalized_room_type = room_type.strip().upper() if room_type else None
 
-        if tipo_norm and tipo_norm not in TIPOS_HABITACION_VALIDOS:
-            raise ErrorParametrosHotel(
+        if normalized_room_type and normalized_room_type not in VALID_ROOM_TYPES:
+            raise HotelParametersError(
                 "El tipo de habitación no es válido en el catálogo PAR-09 (ESTANDAR, DOBLE, SUITE, FAMILIAR)"
             )
-        if fecha_entrada < date.today():
-            raise ErrorParametrosHotel(
+        if check_in_date < date.today():
+            raise HotelParametersError(
                 "La fecha de entrada no puede ser anterior a la fecha actual"
             )
-        if fecha_salida <= fecha_entrada:
-            raise ErrorParametrosHotel(
+        if check_out_date <= check_in_date:
+            raise HotelParametersError(
                 "La fecha de salida debe ser posterior a la fecha de entrada"
             )
 
-        hotel = self.repo.obtener_por_id(id_hotel)
+        hotel = self.repo.get_by_id(hotel_id)
         if not hotel:
-            raise ErrorReglaNegocioHotel(
+            raise HotelBusinessRuleError(
                 "El hotel solicitado no existe o no cuenta con habitaciones activas"
             )
 
-        if hotel.moneda not in MONEDAS_HOTEL_AIN03:
-            raise ErrorReglaNegocioHotel(
+        if hotel.currency not in VALID_HOTEL_CURRENCIES_AIN03:
+            raise HotelBusinessRuleError(
                 "La moneda configurada para el hotel no está habilitada en AIN-03"
             )
 
-        if hotel.habitaciones_disponibles <= 0:
-            raise ErrorReglaNegocioHotel(
+        if hotel.available_rooms <= 0:
+            raise HotelBusinessRuleError(
                 "El hotel no dispone de habitaciones libres para el rango de fechas solicitado"
             )
 
-        noches = (fecha_salida - fecha_entrada).days
-        habitaciones = hotel.generar_habitaciones_tarifas(
-            noches=noches,
-            huespedes=huespedes,
-            tipo_habitacion=tipo_norm,
+        nights = (check_out_date - check_in_date).days
+        rooms = hotel.generate_rooms_and_rates(
+            nights=nights,
+            guests=guests,
+            room_type=normalized_room_type,
         )
 
-        if not habitaciones:
-            raise ErrorReglaNegocioHotel(
+        if not rooms:
+            raise HotelBusinessRuleError(
                 "Ninguna habitación disponible cumple con la capacidad máxima de huéspedes solicitada"
             )
 
-        return ConsultaHabitacionesOut(
+        return RoomRatesQueryOut(
             mensaje="Habitaciones y tarifas consultadas exitosamente",
-            data=[HabitacionTarifaItemOut(**hab) for hab in habitaciones],
+            data=[RoomRateItemOut(**room) for room in rooms],
             success=True,
         )
 
     # HU-021: Bloquear habitación temporalmente (RN-21)
-    def bloquear_habitacion(self, payload: BloqueoHabitacionIn) -> BloqueoHabitacionOut:
-        tipo_norm = payload.tipo_habitacion.strip().upper()
-        capacidades_maximas = {
+    def lock_room(self, payload: RoomLockIn) -> RoomLockOut:
+        normalized_room_type = payload.room_type.strip().upper()
+        max_capacities = {
             "ESTANDAR": 2,
             "DOBLE": 3,
             "SUITE": 4,
             "FAMILIAR": 6,
         }
 
-        if tipo_norm not in TIPOS_HABITACION_VALIDOS:
-            raise ErrorParametrosHotel(
+        if normalized_room_type not in VALID_ROOM_TYPES:
+            raise HotelParametersError(
                 "El tipo de habitación no es válido en el catálogo PAR-09 (ESTANDAR, DOBLE, SUITE, FAMILIAR)"
             )
-        if payload.fecha_entrada < date.today():
-            raise ErrorParametrosHotel(
+        if payload.check_in_date < date.today():
+            raise HotelParametersError(
                 "La fecha de entrada no puede ser anterior a la fecha actual"
             )
-        if payload.fecha_salida <= payload.fecha_entrada:
-            raise ErrorParametrosHotel(
+        if payload.check_out_date <= payload.check_in_date:
+            raise HotelParametersError(
                 "La fecha de salida debe ser al menos un día posterior a la fecha de entrada"
             )
 
-        capacidad_total = capacidades_maximas[tipo_norm] * payload.cantidad_habitaciones
-        if payload.huespedes > capacidad_total:
-            raise ErrorParametrosHotel(
+        total_capacity = max_capacities[normalized_room_type] * payload.room_count
+        if payload.guests > total_capacity:
+            raise HotelParametersError(
                 "La cantidad de huéspedes supera la capacidad máxima permitida para las habitaciones solicitadas"
             )
 
-        hotel = self.repo.obtener_por_id(payload.id_hotel)
+        hotel = self.repo.get_by_id(payload.hotel_id)
         if not hotel:
-            raise ErrorReglaNegocioHotel(
+            raise HotelBusinessRuleError(
                 "El hotel seleccionado no existe o no se encuentra activo"
             )
 
-        if hotel.moneda not in MONEDAS_HOTEL_AIN03:
-            raise ErrorReglaNegocioHotel(
+        if hotel.currency not in VALID_HOTEL_CURRENCIES_AIN03:
+            raise HotelBusinessRuleError(
                 "La moneda configurada para el hotel no está habilitada en AIN-03"
             )
 
         # RN-21: Validar disponibilidad real antes de ejecutar bloqueo temporal
-        if hotel.habitaciones_disponibles < payload.cantidad_habitaciones:
-            raise ErrorReglaNegocioHotel(
+        if hotel.available_rooms < payload.room_count:
+            raise HotelBusinessRuleError(
                 "No hay suficientes habitaciones disponibles en el hotel para realizar el bloqueo temporal"
             )
 
-        noches = (payload.fecha_salida - payload.fecha_entrada).days
-        total_retenido = hotel.calcular_total_bloqueo(
-            tipo_habitacion=tipo_norm,
-            noches=noches,
-            cantidad_habitaciones=payload.cantidad_habitaciones,
+        nights = (payload.check_out_date - payload.check_in_date).days
+        retained_total = hotel.calculate_lock_total(
+            room_type=normalized_room_type,
+            nights=nights,
+            room_count=payload.room_count,
         )
 
-        bloqueo = self.repo.registrar_bloqueo(
+        lock = self.repo.register_lock(
             hotel=hotel,
-            tipo_habitacion=tipo_norm,
-            fecha_entrada=payload.fecha_entrada,
-            fecha_salida=payload.fecha_salida,
-            noches=noches,
-            cantidad_habitaciones=payload.cantidad_habitaciones,
-            huespedes=payload.huespedes,
-            id_usuario=payload.id_usuario,
-            total_retenido=total_retenido,
-            minutos_bloqueo=payload.minutos_bloqueo,
+            room_type=normalized_room_type,
+            check_in_date=payload.check_in_date,
+            check_out_date=payload.check_out_date,
+            nights=nights,
+            room_count=payload.room_count,
+            guests=payload.guests,
+            user_id=payload.user_id,
+            retained_total=retained_total,
+            lock_minutes=payload.lock_minutes,
         )
 
-        return BloqueoHabitacionOut(
+        return RoomLockOut(
             mensaje="Habitación bloqueada temporalmente de forma exitosa",
-            data=BloqueoHabitacionDataOut(**bloqueo.to_response()),
+            data=RoomLockDataOut(**lock.to_response()),
             success=True,
         )

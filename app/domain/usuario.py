@@ -3,43 +3,45 @@ Módulo de Usuarios - Dominio y esquemas de validación.
 Incluye reglas de negocio de registro (RN-01) e inicio de sesión (RN-02).
 """
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional
 import hashlib
 import secrets
 
-TIPOS_DOCUMENTO_VALIDOS = {"CC", "CE", "PA", "TI"}
-PAISES_VALIDOS = {"CO", "MX", "PE", "AR", "CL", "ES", "US"}
-MUNICIPIOS_VALIDOS = {"BOG", "MDE", "CLO", "BGA", "CTG"}
-ROLES_VALIDOS = {"VIAJERO", "ASESOR", "ADMIN"}
+VALID_DOCUMENT_TYPES = {"CC", "CE", "PA", "TI"}
+VALID_COUNTRIES = {"CO", "MX", "PE", "AR", "CL", "ES", "US"}
+VALID_MUNICIPALITIES = {"BOG", "MDE", "CLO", "BGA", "CTG"}
+VALID_ROLES = {"VIAJERO", "ASESOR", "ADMIN"}
 
 
 # --- ESQUEMAS HU-001: REGISTRO ---
-class UsuarioCreate(BaseModel):
-    nombres: str = Field(..., min_length=2, max_length=80)
-    apellidos: str = Field(..., min_length=2, max_length=80)
-    correo: EmailStr
+class UserCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    first_name: str = Field(..., alias="nombres", min_length=2, max_length=80)
+    last_name: str = Field(..., alias="apellidos", min_length=2, max_length=80)
+    email: EmailStr = Field(..., alias="correo")
     password: str = Field(..., min_length=8)
-    tipo_documento: str
-    numero_documento: str = Field(..., min_length=4, max_length=20)
-    pais: str
-    municipio: str
-    rol: Optional[str] = Field(default="VIAJERO")
+    document_type: str = Field(..., alias="tipo_documento")
+    document_number: str = Field(..., alias="numero_documento", min_length=4, max_length=20)
+    country: str = Field(..., alias="pais")
+    municipality: str = Field(..., alias="municipio")
+    role: Optional[str] = Field(default="VIAJERO", alias="rol")
 
-    @field_validator("nombres", "apellidos")
+    @field_validator("first_name", "last_name")
     @classmethod
-    def validar_solo_letras(cls, v: str) -> str:
-        if any(c.isdigit() for c in v):
+    def validate_letters_only(cls, value: str) -> str:
+        if any(char.isdigit() for char in value):
             raise ValueError("Los nombres y apellidos no pueden contener números")
-        return v.strip().title()
+        return value.strip().title()
 
-    @field_validator("tipo_documento", "pais", "municipio", "rol")
+    @field_validator("document_type", "country", "municipality", "role")
     @classmethod
-    def normalizar_codigo(cls, v: Optional[str]) -> Optional[str]:
-        return v.strip().upper() if v else v
+    def normalize_code(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip().upper() if value else value
 
 
-class UsuarioDataOut(BaseModel):
+class UserDataOut(BaseModel):
     id_usuario: int
     nombres: str
     apellidos: str
@@ -52,15 +54,17 @@ class UsuarioDataOut(BaseModel):
     estado: str
 
 
-class RegistroUsuarioOut(BaseModel):
+class UserRegistrationOut(BaseModel):
     mensaje: str
-    data: Optional[UsuarioDataOut] = None
+    data: Optional[UserDataOut] = None
     success: bool
 
 
 # --- ESQUEMAS HU-002: INICIAR SESIÓN ---
-class UsuarioLogin(BaseModel):
-    correo: EmailStr
+class UserLogin(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    email: EmailStr = Field(..., alias="correo")
     password: str = Field(..., min_length=1)
 
 
@@ -74,64 +78,64 @@ class LoginDataOut(BaseModel):
     rol: str
 
 
-class LoginUsuarioOut(BaseModel):
+class UserLoginOut(BaseModel):
     mensaje: str
     data: Optional[LoginDataOut] = None
     success: bool
 
 
 # --- ENTIDAD DE DOMINIO ---
-class Usuario:
+class User:
     def __init__(
         self,
-        id_usuario: int,
-        nombres: str,
-        apellidos: str,
-        correo: str,
+        user_id: int,
+        first_name: str,
+        last_name: str,
+        email: str,
         password_hash: str,
-        tipo_documento: str,
-        numero_documento: str,
-        pais: str,
-        municipio: str,
-        rol: str = "VIAJERO",
-        estado: str = "ACTIVO",
+        document_type: str,
+        document_number: str,
+        country: str,
+        municipality: str,
+        role: str = "VIAJERO",
+        status: str = "ACTIVO",
     ):
-        self.id_usuario = id_usuario
-        self.nombres = nombres
-        self.apellidos = apellidos
-        self.correo = correo.lower().strip()
+        self.user_id = user_id
+        self.first_name = first_name
+        self.last_name = last_name
+        self.email = email.lower().strip()
         self.password_hash = password_hash
-        self.tipo_documento = tipo_documento
-        self.numero_documento = numero_documento
-        self.pais = pais
-        self.municipio = municipio
-        self.rol = rol
-        self.estado = estado
+        self.document_type = document_type
+        self.document_number = document_number
+        self.country = country
+        self.municipality = municipality
+        self.role = role
+        self.status = status
 
     @staticmethod
-    def encriptar_password(password_plano: str) -> str:
-        return hashlib.sha256(password_plano.encode("utf-8")).hexdigest()
+    def hash_password(plain_password: str) -> str:
+        return hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
 
-    def verificar_password(self, password_plano: str) -> bool:
-        return self.password_hash == self.encriptar_password(password_plano)
+    def verify_password(self, plain_password: str) -> bool:
+        return self.password_hash == self.hash_password(plain_password)
 
     @staticmethod
-    def generar_token_sesion() -> str:
+    def generate_session_token() -> str:
         return f"vs_tok_{secrets.token_urlsafe(32)}"
 
-    def esta_activo(self) -> bool:
-        return self.estado == "ACTIVO"
+    def is_active(self) -> bool:
+        return self.status == "ACTIVO"
 
     def to_response(self) -> dict:
         return {
-            "id_usuario": self.id_usuario,
-            "nombres": self.nombres,
-            "apellidos": self.apellidos,
-            "correo": self.correo,
-            "tipo_documento": self.tipo_documento,
-            "numero_documento": self.numero_documento,
-            "pais": self.pais,
-            "municipio": self.municipio,
-            "rol": self.rol,
-            "estado": self.estado,
+            "id_usuario": self.user_id,
+            "nombres": self.first_name,
+            "apellidos": self.last_name,
+            "correo": self.email,
+            "tipo_documento": self.document_type,
+            "numero_documento": self.document_number,
+            "pais": self.country,
+            "municipio": self.municipality,
+            "rol": self.role,
+            "estado": self.status,
         }
