@@ -27,6 +27,10 @@ class InvalidCredentialsError(Exception):
     pass
 
 
+class LoginParametersError(Exception):
+    pass
+
+
 class UserService:
     def __init__(self, repo: UserRepository):
         self.repo = repo
@@ -70,6 +74,11 @@ class UserService:
         )
 
     def login_user(self, data: UserLogin) -> UserLoginOut:
+        if not data.password or not data.password.strip() or len(data.password.strip()) < 4:
+            raise LoginParametersError(
+                "Los parámetros de inicio de sesión son inválidos o incompletos"
+            )
+
         user = self.repo.get_by_email(data.email)
 
         # RN-02: Verifica existencia, estado ACTIVO y coincidencia de hash

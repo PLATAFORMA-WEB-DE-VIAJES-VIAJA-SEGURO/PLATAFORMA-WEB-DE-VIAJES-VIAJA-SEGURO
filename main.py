@@ -32,7 +32,7 @@ app.add_middleware(
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
     return JSONResponse(
-        status_code=400,
+        status_code=422,
         content={
             "mensaje": "Parámetros de entrada inválidos o incompletos",
             "data": None,
