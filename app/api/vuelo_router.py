@@ -22,12 +22,178 @@ router = APIRouter(
 
 service = FlightService(repo=flight_repository)
 
+OPENAPI_SEARCH_FLIGHTS_RESPONSES = {
+    200: {
+        "description": "Vuelos disponibles consultados exitosamente",
+        "model": FlightSearchOut,
+    },
+    400: {
+        "description": "Código IATA inválido, origen igual a destino o fechas inválidas",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El código IATA de origen o destino no es válido",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "Sin vuelos o sin cupos suficientes para la ruta, fecha y pasajeros solicitados (RN-11)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No se encontraron vuelos disponibles para la ruta, fecha y cantidad de pasajeros solicitados",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "El servicio de búsqueda de vuelos (GDS Aerolíneas) no está disponible",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El servicio de búsqueda de vuelos (GDS Aerolíneas) no está disponible en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
+OPENAPI_FLIGHT_FARES_RESPONSES = {
+    200: {
+        "description": "Tarifas del vuelo consultadas exitosamente",
+        "model": FlightFaresQueryOut,
+    },
+    400: {
+        "description": "La cabina solicitada no es válida",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "La cabina solicitada no es válida (use ECONOMICA, EJECUTIVA o PRIMERA)",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "El vuelo no existe, no dispone de cupos o moneda inactiva (RN-13)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El vuelo ya no dispone de cupos para cotizar tarifas vigentes",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de disponibilidad al consultar tarifas en AEX-01",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible consultar las tarifas del vuelo en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
+OPENAPI_SEAT_LOCK_RESPONSES = {
+    201: {
+        "description": "Puestos bloqueados temporalmente exitosamente",
+        "model": SeatLockOut,
+    },
+    400: {
+        "description": "El código de tarifa proporcionado no es válido",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El código de tarifa proporcionado no es válido",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "El vuelo no existe o no hay suficientes puestos disponibles (RN-15)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No hay suficientes puestos disponibles en el vuelo para realizar el bloqueo solicitado",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de disponibilidad al bloquear puestos en AEX-01",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible bloquear los puestos del vuelo en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
 
 # HU-011: Buscar vuelos
 @router.get(
     "",
     response_model=FlightSearchOut,
     status_code=status.HTTP_200_OK,
+    responses=OPENAPI_SEARCH_FLIGHTS_RESPONSES,
     summary="Buscar vuelos",
     description="Consulta la oferta aérea disponible en AEX-01 (GDS Aerolíneas) según origen, destino, fechas y pasajeros (RN-11).",
 )
@@ -72,6 +238,7 @@ def search_flights(
     "/{id_vuelo}/tarifas",
     response_model=FlightFaresQueryOut,
     status_code=status.HTTP_200_OK,
+    responses=OPENAPI_FLIGHT_FARES_RESPONSES,
     summary="Consultar tarifas del vuelo",
     description="Obtiene las familias tarifarias del vuelo según cabina y equipaje validando moneda en AIN-02 y cupo vigente (RN-13).",
 )
@@ -112,6 +279,7 @@ def get_flight_fares(
     "/{id_vuelo}/bloqueo",
     response_model=SeatLockOut,
     status_code=status.HTTP_201_CREATED,
+    responses=OPENAPI_SEAT_LOCK_RESPONSES,
     summary="Bloquear puestos temporalmente",
     description="Retiene temporalmente los cupos solicitados en AEX-01 durante un máximo de 20 minutos antes del cierre de compra (RN-15).",
 )
@@ -121,6 +289,11 @@ def lock_flight_seats(
 ):
     try:
         return service.lock_flight_seats(flight_id=flight_id, data=payload)
+    except FlightSearchParametersError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"mensaje": str(exc), "data": None, "success": False},
+        )
     except FlightBusinessRuleError as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,

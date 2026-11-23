@@ -24,11 +24,67 @@ service = TravelDocumentService(
     user_repo=user_repository,
 )
 
+OPENAPI_REGISTER_DOCUMENT_RESPONSES = {
+    201: {
+        "description": "Documento de viaje registrado exitosamente",
+        "model": TravelDocumentRegistrationOut,
+    },
+    400: {
+        "description": "El tipo de documento o país de emisión proporcionado no son válidos (AIN-01)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El tipo de documento o país de emisión proporcionado no son válidos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "Violación de regla de negocio RN-08 (documento vencido, duplicado o usuario inactivo)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El documento de viaje ya se encuentra registrado en el perfil del usuario",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de disponibilidad en el almacenamiento de documentos (MOD-01)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible registrar el documento de viaje en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
 
 @router.post(
     "",
     response_model=TravelDocumentRegistrationOut,
     status_code=status.HTTP_201_CREATED,
+    responses=OPENAPI_REGISTER_DOCUMENT_RESPONSES,
     summary="Registrar documento de viaje",
     description="Registra un documento legal (pasaporte, cédula, etc.) para el viajero validando catálogos (AIN-01) y vigencia (RN-08).",
 )

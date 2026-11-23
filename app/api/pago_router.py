@@ -74,6 +74,18 @@ OPENAPI_PAYMENT_METHODS_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (La pasarela AEX-04 no se encuentra disponible)",
         "content": {
@@ -98,7 +110,7 @@ OPENAPI_PAYMENT_METHODS_RESPONSES = {
     description="Retorna las alternativas y métodos de pago financieros activos habilitados por la pasarela AEX-04 y AIN-06.",
 )
 def get_payment_methods(
-    currency: Optional[str] = Query("COP", alias="moneda", description="Código ISO de la moneda (por defecto COP, ej: USD, EUR)"),
+    currency: Optional[str] = Query("COP", alias="moneda", max_length=10, description="Código ISO de la moneda (por defecto COP, ej: USD, EUR)"),
 ):
     # Recargar variables de entorno dinámicamente
     load_dotenv(override=True)

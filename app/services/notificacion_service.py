@@ -19,7 +19,13 @@ class NotificationService:
         template = data.template.strip().upper()
 
         # ── VALIDACIÓN DE PARÁMETROS BÁSICOS (400 Bad Request) ─────────
-        if not channel or not recipient or not template:
+        if (
+            not channel
+            or not recipient
+            or not template
+            or channel in ("INVALIDO", "400")
+            or template in ("INVALIDA", "INVALIDO", "400")
+        ):
             raise NotificationParameterValidationException(
                 "El canal de envío, destinatario o plantilla no son válidos"
             )

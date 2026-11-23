@@ -8,13 +8,32 @@ from app.domain.soporte import (
 from app.repositories.soporte_repository import SupportRepository
 
 
+ALLOWED_CASE_TYPES = {
+    "MODIFICACION_ITINERARIO",
+    "CANCELACION",
+    "REEMBOLSO",
+    "EQUIPAJE",
+    "FACTURACION",
+    "QUEJA",
+    "RECLAMO",
+    "PETICION",
+    "CONSULTA",
+}
+
+
 class SupportService:
     def __init__(self, repo: SupportRepository):
         self.repo = repo
 
     def file_case(self, data: SupportCaseCreate) -> SupportCaseResponse:
-        # ── VALIDACIONES DE CAMPOS OBLIGATORIOS (400 Bad Request) ───────
-        if not data.case_type or not data.subject or not data.description:
+        # ── VALIDACIONES DE CAMPOS OBLIGATORIOS Y CATÁLOGO (400 Bad Request) ───────
+        normalized_case_type = (data.case_type or "").strip().upper()
+        if (
+            not normalized_case_type
+            or not data.subject
+            or not data.description
+            or normalized_case_type not in ALLOWED_CASE_TYPES
+        ):
             raise SupportParameterValidationException("El tipo de caso, asunto o descripción son obligatorios")
 
         # ── APLICACIÓN DE LA REGLA DE NEGOCIO RN-51 (409 Conflict) ──────

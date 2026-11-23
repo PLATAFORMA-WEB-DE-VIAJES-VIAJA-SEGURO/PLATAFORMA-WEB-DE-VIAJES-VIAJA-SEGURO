@@ -21,19 +21,185 @@ router = APIRouter(
 
 service = PackageService(repo=package_repository)
 
+OPENAPI_DESTINATIONS_RESPONSES = {
+    200: {
+        "description": "Destinos turísticos consultados exitosamente",
+        "model": DestinationsQueryOut,
+    },
+    400: {
+        "description": "Código de país, municipio o tipo de paquete inválido en PAR-02/PAR-03/PAR-10",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El código de país no es válido en el catálogo PAR-02",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "No se encontraron destinos turísticos activos para los criterios consultados (RN-23)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No se encontraron destinos turísticos activos para los criterios consultados",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "El servicio de catálogo de destinos no está disponible",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El servicio de catálogo de destinos no está disponible en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
+OPENAPI_ACTIVITIES_RESPONSES = {
+    200: {
+        "description": "Actividades del destino consultadas exitosamente",
+        "model": ActivitiesQueryOut,
+    },
+    400: {
+        "description": "Fechas inválidas o categoría de actividad no válida",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "La categoría de actividad no es válida (TOUR_GUIADO, AVENTURA, GASTRONOMIA, ACUATICA, CULTURAL)",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "El destino no existe o no cuenta con actividades disponibles en AEX-03 (RN-26)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No se encontraron actividades disponibles en AEX-03 para el destino y criterios indicados",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "El servicio de operadores locales (AEX-03) no está disponible",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "El servicio de operadores locales (AEX-03) no está disponible en este momento",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
+OPENAPI_ACTIVITY_AVAILABILITY_RESPONSES = {
+    200: {
+        "description": "Cupo y tarifa de actividad verificados exitosamente",
+        "model": ActivityAvailabilityOut,
+    },
+    400: {
+        "description": "La fecha solicitada para la actividad es anterior a la fecha actual",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "La fecha solicitada para la actividad no puede ser anterior a la fecha actual",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    409: {
+        "description": "La actividad no existe o no hay cupos suficientes disponibles (RN-27)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No hay cupos suficientes disponibles para la cantidad de personas solicitada en esta actividad",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    503: {
+        "description": "Falla de disponibilidad al verificar cupo y tarifa en AEX-03",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "No fue posible verificar la disponibilidad y tarifa de la actividad en AEX-03",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+}
+
 
 # HU-023: Consultar destinos
 @router.get(
     "/destinos",
     response_model=DestinationsQueryOut,
     status_code=status.HTTP_200_OK,
+    responses=OPENAPI_DESTINATIONS_RESPONSES,
     summary="Consultar destinos",
     description="Obtiene el catálogo de destinos turísticos activos validando país (PAR-02), municipio (PAR-03) y tipo de paquete (PAR-10) mediante AIN-04 (RN-23).",
 )
 def get_destinations(
-    country: Optional[str] = Query(default=None, alias="pais", description="Código ISO de país opcional (ej. CO, US)"),
-    municipality: Optional[str] = Query(default=None, alias="municipio", description="Código IATA/municipio opcional (ej. CTG, MDE, BOG)"),
-    package_type: Optional[str] = Query(default=None, alias="tipo_paquete", description="Tipo opcional: TODO_INCLUIDO, AVENTURA, CULTURAL, PLAYA, FAMILIAR"),
+    country: Optional[str] = Query(default=None, alias="pais", min_length=2, max_length=3, description="Código ISO de país opcional (ej. CO, US)"),
+    municipality: Optional[str] = Query(default=None, alias="municipio", min_length=3, max_length=3, description="Código IATA/municipio opcional (ej. CTG, MDE, BOG)"),
+    package_type: Optional[str] = Query(default=None, alias="tipo_paquete", min_length=3, max_length=20, description="Tipo opcional: TODO_INCLUIDO, AVENTURA, CULTURAL, PLAYA, FAMILIAR"),
 ):
     try:
         return service.get_destinations(
@@ -67,6 +233,7 @@ def get_destinations(
     "/actividades",
     response_model=ActivitiesQueryOut,
     status_code=status.HTTP_200_OK,
+    responses=OPENAPI_ACTIVITIES_RESPONSES,
     summary="Consultar actividades del destino",
     description="Consulta los tours y atracciones disponibles en operadores locales (AEX-03) para un destino y rango de fechas (RN-26).",
 )
@@ -109,6 +276,7 @@ def get_destination_activities(
     "/actividades/{id_actividad}/disponibilidad",
     response_model=ActivityAvailabilityOut,
     status_code=status.HTTP_200_OK,
+    responses=OPENAPI_ACTIVITY_AVAILABILITY_RESPONSES,
     summary="Verificar cupo y tarifa de actividad",
     description="Valida en tiempo real el aforo disponible y calcula la tarifa total con impuestos en AEX-03 y moneda PAR-07 vía AIN-04 (RN-27).",
 )

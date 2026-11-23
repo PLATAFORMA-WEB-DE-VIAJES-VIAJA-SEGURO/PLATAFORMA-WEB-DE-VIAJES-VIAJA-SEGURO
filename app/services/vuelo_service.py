@@ -122,6 +122,14 @@ class FlightService:
     def lock_flight_seats(
         self, flight_id: str, data: SeatLockCreate
     ) -> SeatLockOut:
+        if data.fare_code:
+            valid_suffixes = ("-ECO-BASIC", "-ECO-FLEX", "-EJE-PLUS", "-PRI-SUITE")
+            normalized_fare = data.fare_code.strip().upper()
+            if not normalized_fare.endswith(valid_suffixes):
+                raise FlightSearchParametersError(
+                    "El código de tarifa proporcionado no es válido"
+                )
+
         flight = self.repo.get_by_id(flight_id)
         if not flight:
             raise FlightBusinessRuleError(

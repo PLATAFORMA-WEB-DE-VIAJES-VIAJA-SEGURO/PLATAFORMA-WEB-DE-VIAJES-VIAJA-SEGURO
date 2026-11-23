@@ -66,6 +66,18 @@ OPENAPI_NOTIFICATION_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (El proveedor externo AEX-06 no responde)",
         "content": {
