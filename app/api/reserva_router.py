@@ -95,6 +95,18 @@ OPENAPI_ADD_ITEM_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (Indisponibilidad de servicios AIN-09, AIN-10 o AIN-13)",
         "content": {
@@ -169,6 +181,18 @@ OPENAPI_GET_CART_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (No fue posible recuperar el carrito de compras)",
         "content": {
@@ -229,6 +253,18 @@ OPENAPI_CALCULATE_TOTAL_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (Error al calcular el total de la compra)",
         "content": {
@@ -282,6 +318,18 @@ OPENAPI_CHECKOUT_RESPONSES = {
             "application/json": {
                 "example": {
                     "mensaje": "El carrito ya fue cerrado previamente o algún bloqueo de servicio caducó",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
                     "data": None,
                     "success": False,
                 }
@@ -349,6 +397,18 @@ OPENAPI_CREATE_RESERVATION_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (Indisponibilidad de servicios AIN-05, AIN-08, AIN-09 o AIN-10)",
         "content": {
@@ -401,6 +461,18 @@ OPENAPI_REGISTER_TRAVELERS_RESPONSES = {
             "application/json": {
                 "example": {
                     "mensaje": "La cantidad de viajeros no coincide con los cupos o hay documentos duplicados",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
                     "data": None,
                     "success": False,
                 }
@@ -461,6 +533,18 @@ OPENAPI_CANCEL_RESERVATION_RESPONSES = {
             "application/json": {
                 "example": {
                     "mensaje": "La reserva ya se encuentra cancelada o en un estado final que no permite anulación",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
                     "data": None,
                     "success": False,
                 }

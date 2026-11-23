@@ -69,6 +69,18 @@ OPENAPI_INVOICE_RESPONSES = {
             }
         },
     },
+    422: {
+        "description": "Parámetros de entrada inválidos o incompletos (validación de esquema)",
+        "content": {
+            "application/json": {
+                "example": {
+                    "mensaje": "Parámetros de entrada inválidos o incompletos",
+                    "data": None,
+                    "success": False,
+                }
+            }
+        },
+    },
     503: {
         "description": "Falla de Disponibilidad (Proveedor AEX-05 no disponible)",
         "content": {
